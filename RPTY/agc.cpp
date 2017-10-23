@@ -218,7 +218,7 @@ int main(int argc,char *argv[]){
 	}
 	
 	if (AGC_init()) return -1;		//fpga init
-	AGC_setup(alpha_thresh,gamma_thresh,alpha_mintime_uint,gamma_mintime_uint,alpha_delay);
+	AGC_setup(alpha_thresh,gamma_thresh,alpha_mintime_uint,gamma_mintime_uint,alpha_delay);	//TODO fix signs
 	
 
 	if(pf){

@@ -121,14 +121,14 @@ inline unsigned int AGC_get_max_in_queue()
 	return (AGC->mes_in_queue&0xFFFF0000)>>16;
 }
 
-int AGC_setup(int cntr_thresh_alpha, int cntr_thresh_gamma, unsigned int cntr_mintime_alpha, unsigned int cntr_mintime_gamma, unsigned char out_a_time_shift)	
+int AGC_setup(int cntr_thresh_alpha, int cntr_thresh_gamma, bool cntr_sign_alpha, bool cntr_sign_gamma, unsigned int cntr_mintime_alpha, unsigned int cntr_mintime_gamma, unsigned char out_a_time_shift)	
 {
 	if (cntr_thresh_alpha>8191) cntr_thresh_alpha=8191;			//threshold from -8192 to 8191
 	else if (cntr_thresh_alpha<-8192) cntr_thresh_alpha=-8192;		//if threshold is negative the peak is assumed to be inverted
 	if (cntr_thresh_gamma>8191) cntr_thresh_gamma=8191;
 	else if (cntr_thresh_gamma<-8192) cntr_thresh_gamma=-8192;
-	AGC->cntr_thresh_alpha = (cntr_thresh_alpha&0x3FFF);
-	AGC->cntr_thresh_gamma = (cntr_thresh_gamma&0x3FFF);
+	AGC->cntr_thresh_alpha = (cntr_thresh_alpha&0x3FFF)+cntr_sign_alpha?0x80000000:0;
+	AGC->cntr_thresh_gamma = (cntr_thresh_gamma&0x3FFF)+cntr_sign_gamma?0x80000000:0;
 	AGC->cntr_mintime_alpha = cntr_mintime_alpha;				//time is: cntr_mintime_alpha * 8 ns
 	AGC->cntr_mintime_gamma = cntr_mintime_gamma;
 	AGC->out_a_time_shift = out_a_time_shift;

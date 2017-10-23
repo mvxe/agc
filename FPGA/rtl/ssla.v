@@ -63,7 +63,9 @@ assign in_b = dat_b_i;
 `define FIFO_size 200
 
 reg signed [ 13: 0] cntr_thresh_alpha;
+reg                 cntr_sign_alpha;
 reg signed [ 13: 0] cntr_thresh_gamma;
+reg                 cntr_sign_gamma;
 reg  [ 31: 0] cntr_mintime_alpha;
 reg  [ 31: 0] cntr_mintime_gamma;
 
@@ -178,9 +180,9 @@ always @(posedge clk_i) begin
 		end
 		else mes_lost <= mes_lost + 32'd1;
 		
-		if ( (cntr_alpha_saveflag == 1'd0) && (((cntr_thresh_alpha>=14'sd0) && (out_a_fifo[out_a_time_shift] >= cntr_thresh_alpha)) || ((cntr_thresh_alpha<14'sd0) && (out_a_fifo[out_a_time_shift] <= cntr_thresh_alpha))) ) begin		//alpha adc over threshold
+		if ( (cntr_alpha_saveflag == 1'd0) && (((!cntr_sign_alpha) && (out_a_fifo[out_a_time_shift] >= cntr_thresh_alpha)) || ((cntr_sign_alpha) && (out_a_fifo[out_a_time_shift] <= cntr_thresh_alpha))) ) begin		//alpha adc over threshold
 			if (cntr_alpha_ongoing == 1'd1) begin															
-				if ( ((cntr_thresh_alpha>=14'sd0) && (out_a_fifo[out_a_time_shift] > cntr_max_alpha)) || ((cntr_thresh_alpha<14'sd0) && (out_a_fifo[out_a_time_shift] < cntr_max_alpha)) ) begin					//new maxval found
+				if ( ((!cntr_sign_alpha) && (out_a_fifo[out_a_time_shift] > cntr_max_alpha)) || ((cntr_sign_alpha) && (out_a_fifo[out_a_time_shift] < cntr_max_alpha)) ) begin					//new maxval found
 					cntr_max_alpha <= out_a_fifo[out_a_time_shift];
 //					cntr_t2_alpha <= 32'd0;
 				end
@@ -200,9 +202,9 @@ always @(posedge clk_i) begin
 			if (cntr_t1_alpha>=cntr_mintime_alpha) cntr_alpha_saveflag <= 1'b1;	//we save only if the peak is wide enough (else it might be noise or something else)
 		end
 		
-		if ( (cntr_gamma_saveflag == 1'd0) && (((cntr_thresh_gamma>=14'sd0) && (out_b_dela >= cntr_thresh_gamma)) || ((cntr_thresh_gamma<14'sd0) && (out_b_dela <= cntr_thresh_gamma))) ) begin		//gamma adc over threshold
+		if ( (cntr_gamma_saveflag == 1'd0) && (((!cntr_sign_gamma) && (out_b_dela >= cntr_thresh_gamma)) || ((cntr_sign_gamma) && (out_b_dela <= cntr_thresh_gamma))) ) begin		//gamma adc over threshold
 			if (cntr_gamma_ongoing == 1'd1) begin															
-				if ( ((cntr_thresh_gamma>=14'sd0) && (out_b_dela > cntr_max_gamma)) || ((cntr_thresh_gamma<14'sd0) && (out_b_dela < cntr_max_gamma)) ) begin
+				if ( ((!cntr_sign_gamma) && (out_b_dela > cntr_max_gamma)) || ((cntr_sign_gamma) && (out_b_dela < cntr_max_gamma)) ) begin
 					cntr_max_gamma <= out_b_dela;
 //					cntr_t2_gamma <= 32'd0;
 				end
@@ -252,7 +254,9 @@ end
 always @(posedge clk_i) begin
 	if (rstn_i == 1'b0) begin
 		cntr_thresh_alpha <= 14'sd8191;
+		cntr_sign_alpha <= 1'd0;			//0 == rising edge trigger
 		cntr_thresh_gamma <= 14'sd8191;
+		cntr_sign_gamma <= 1'd0;
 		cntr_mintime_alpha <= 32'd4294967295;
 		cntr_mintime_gamma <= 32'd4294967295;
 		out_a_time_shift <= 8'd0;
@@ -262,8 +266,14 @@ always @(posedge clk_i) begin
 	else begin
 		if (sys_wen) begin
 			casez (sys_addr[19:0])
-				20'h0000	: 	cntr_thresh_alpha <= sys_wdata[13:0];
-				20'h0004	: 	cntr_thresh_gamma <= sys_wdata[13:0];
+				20'h0000	: begin 	
+							cntr_thresh_alpha <= sys_wdata[13:0];
+				        	  	cntr_sign_alpha <= sys_wdata[31];
+				        	  end
+				20'h0004	: begin	
+							cntr_thresh_gamma <= sys_wdata[13:0];
+				        	  	cntr_sign_gamma <= sys_wdata[31];	
+				        	  end		
 				20'h0008	: 	cntr_mintime_alpha <= sys_wdata[31:0];
 				20'h000C	: 	cntr_mintime_gamma <= sys_wdata[31:0];
 				
@@ -289,8 +299,8 @@ if (rstn_i == 1'b0) begin
 end else begin
    sys_err <= 1'b0 ;
 	casez (sys_addr[19:0])
-		20'h0000		: begin sys_ack <= sys_en;	sys_rdata <= {{32-14{1'b0}},		cntr_thresh_alpha		}; end
-		20'h0004		: begin sys_ack <= sys_en;	sys_rdata <= {{32-14{1'b0}},		cntr_thresh_gamma		}; end
+		20'h0000		: begin sys_ack <= sys_en;	sys_rdata <= {cntr_sign_alpha, {32-15{1'b0}}, cntr_thresh_alpha}; end
+		20'h0004		: begin sys_ack <= sys_en;	sys_rdata <= {cntr_sign_gamma, {32-15{1'b0}}, cntr_thresh_gamma}; end
 		20'h0008		: begin sys_ack <= sys_en;	sys_rdata <= cntr_mintime_alpha	; end
 		20'h000C		: begin sys_ack <= sys_en;	sys_rdata <= cntr_mintime_gamma	; end
 
