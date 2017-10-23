@@ -14,3 +14,6 @@ To compile (replace PATH with your vivado installation folder) run:
 %	make FPGA_TOOL=vivado out/red_pitaya.bit
 The FPGA-binaries folder contains precompiled binaries.
 
+##RPTY
+This program runs on the Red Pitaya CPU. You should copy the RPTY folder over to the Red Pitaya.
+You can compile it there, but you need a Red Pitaya image with gcc (not all of them have one installed).

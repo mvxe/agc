@@ -233,9 +233,9 @@ assign sys_rdata[5*32+:32] = 32'h0;
 assign sys_err  [5       ] =  1'b0;
 assign sys_ack  [5       ] =  1'b1;
 
-assign sys_rdata[6*32+:32] = 32'h0; 
-assign sys_err  [6       ] =  1'b0;
-assign sys_ack  [6       ] =  1'b1;
+//assign sys_rdata[6*32+:32] = 32'h0; 
+//assign sys_err  [6       ] =  1'b0;
+//assign sys_ack  [6       ] =  1'b1;
 
 assign sys_rdata[7*32+:32] = 32'h0; 
 assign sys_err  [7       ] =  1'b0;
@@ -356,8 +356,8 @@ assign adc_b = digital_loop ? dac_b : {adc_dat_b[14-1], ~adc_dat_b[14-2:0]};
 ////////////////////////////////////////////////////////////////////////////////
 
 // Sumation of ASG and PID signal perform saturation before sending to DAC 
-assign dac_a_sum = asg_a + pid_a;
-assign dac_b_sum = asg_b + pid_b;
+assign dac_a_sum = $signed(asg_a) + $signed(pid_a) + $signed(lfs_a);
+assign dac_b_sum = $signed(asg_b) + $signed(pid_b) + $signed(lfs_b);
 
 // saturation
 assign dac_a = (^dac_a_sum[15-1:15-2]) ? {dac_a_sum[15-1], {13{~dac_a_sum[15-1]}}} : dac_a_sum[14-1:0];
@@ -392,13 +392,19 @@ red_pitaya_hk i_hk (
   .led_o           (  led_o                      ),  // LED output
   // global configuration
   .digital_loop    (  digital_loop               ),
-  // Expansion connector
-  .exp_p_dat_i     (  exp_p_in                   ),  // input data
-  .exp_p_dat_o     (  exp_p_out                  ),  // output data
-  .exp_p_dir_o     (  exp_p_dir                  ),  // 1-output enable
-  .exp_n_dat_i     (  exp_n_in                   ),
-  .exp_n_dat_o     (  exp_n_out                  ),
-  .exp_n_dir_o     (  exp_n_dir                  ),
+   // Expansion connector
+//  .exp_p_dat_i     (  exp_p_in                   ),  // input data
+//  .exp_p_dat_o     (  exp_p_out                  ),  // output data
+//  .exp_p_dir_o     (  exp_p_dir                  ),  // 1-output enable
+//  .exp_n_dat_i     (  exp_n_in                   ),
+//  .exp_n_dat_o     (  exp_n_out                  ),
+//  .exp_n_dir_o     (  exp_n_dir                  ),
+  .exp_p_dat_i     (                             ),  // input data
+  .exp_p_dat_o     (                             ),  // output data
+  .exp_p_dir_o     (                             ),  // 1-output enable
+  .exp_n_dat_i     (                             ),
+  .exp_n_dat_o     (                             ),
+  .exp_n_dir_o     (                             ),
    // System bus
   .sys_addr        (  sys_addr                   ),  // address
   .sys_wdata       (  sys_wdata                  ),  // write data
@@ -418,35 +424,43 @@ IOBUF i_iobufn [8-1:0] (.O(exp_n_in), .IO(exp_n_io), .I(exp_n_out), .T(~exp_n_di
 
 wire trig_asg_out ;
 
-red_pitaya_scope i_scope (
-  // ADC
-  .adc_a_i         (  adc_a                      ),  // CH 1
-  .adc_b_i         (  adc_b                      ),  // CH 2
-  .adc_clk_i       (  adc_clk                    ),  // clock
-  .adc_rstn_i      (  adc_rstn                   ),  // reset - active low
-  .trig_ext_i      (  exp_p_in[0]                ),  // external trigger
-  .trig_asg_i      (  trig_asg_out               ),  // ASG trigger
-  // AXI0 master                 // AXI1 master
-  .axi0_clk_o    (axi0_clk   ),  .axi1_clk_o    (axi1_clk   ),
-  .axi0_rstn_o   (axi0_rstn  ),  .axi1_rstn_o   (axi1_rstn  ),
-  .axi0_waddr_o  (axi0_waddr ),  .axi1_waddr_o  (axi1_waddr ),
-  .axi0_wdata_o  (axi0_wdata ),  .axi1_wdata_o  (axi1_wdata ),
-  .axi0_wsel_o   (axi0_wsel  ),  .axi1_wsel_o   (axi1_wsel  ),
-  .axi0_wvalid_o (axi0_wvalid),  .axi1_wvalid_o (axi1_wvalid),
-  .axi0_wlen_o   (axi0_wlen  ),  .axi1_wlen_o   (axi1_wlen  ),
-  .axi0_wfixed_o (axi0_wfixed),  .axi1_wfixed_o (axi1_wfixed),
-  .axi0_werr_i   (axi0_werr  ),  .axi1_werr_i   (axi1_werr  ),
-  .axi0_wrdy_i   (axi0_wrdy  ),  .axi1_wrdy_i   (axi1_wrdy  ),
-  // System bus
-  .sys_addr        (  sys_addr                   ),  // address
-  .sys_wdata       (  sys_wdata                  ),  // write data
-  .sys_sel         (  sys_sel                    ),  // write byte select
-  .sys_wen         (  sys_wen[1]                 ),  // write enable
-  .sys_ren         (  sys_ren[1]                 ),  // read enable
-  .sys_rdata       (  sys_rdata[ 1*32+31: 1*32]  ),  // read data
-  .sys_err         (  sys_err[1]                 ),  // error indicator
-  .sys_ack         (  sys_ack[1]                 )   // acknowledge signal
-);
+//red_pitaya_scope i_scope (
+//  // ADC
+//  .adc_a_i         (  adc_a                      ),  // CH 1
+//  .adc_b_i         (  adc_b                      ),  // CH 2
+//  .adc_clk_i       (  adc_clk                    ),  // clock
+//  .adc_rstn_i      (  adc_rstn                   ),  // reset - active low
+//  .trig_ext_i      (  exp_p_in[0]                ),  // external trigger
+//  .trig_asg_i      (  trig_asg_out               ),  // ASG trigger
+//  // AXI0 master                 // AXI1 master
+//  .axi0_clk_o    (axi0_clk   ),  .axi1_clk_o    (axi1_clk   ),
+//  .axi0_rstn_o   (axi0_rstn  ),  .axi1_rstn_o   (axi1_rstn  ),
+//  .axi0_waddr_o  (axi0_waddr ),  .axi1_waddr_o  (axi1_waddr ),
+//  .axi0_wdata_o  (axi0_wdata ),  .axi1_wdata_o  (axi1_wdata ),
+//  .axi0_wsel_o   (axi0_wsel  ),  .axi1_wsel_o   (axi1_wsel  ),
+//  .axi0_wvalid_o (axi0_wvalid),  .axi1_wvalid_o (axi1_wvalid),
+//  .axi0_wlen_o   (axi0_wlen  ),  .axi1_wlen_o   (axi1_wlen  ),
+//  .axi0_wfixed_o (axi0_wfixed),  .axi1_wfixed_o (axi1_wfixed),
+//  .axi0_werr_i   (axi0_werr  ),  .axi1_werr_i   (axi1_werr  ),
+//  .axi0_wrdy_i   (axi0_wrdy  ),  .axi1_wrdy_i   (axi1_wrdy  ),
+//  // System bus
+//  .sys_addr        (  sys_addr                   ),  // address
+//  .sys_wdata       (  sys_wdata                  ),  // write data
+//  .sys_sel         (  sys_sel                    ),  // write byte select
+//  .sys_wen         (  sys_wen[1]                 ),  // write enable
+//  .sys_ren         (  sys_ren[1]                 ),  // read enable
+//  .sys_rdata       (  sys_rdata[ 1*32+31: 1*32]  ),  // read data
+//  .sys_err         (  sys_err[1]                 ),  // error indicator
+//  .sys_ack         (  sys_ack[1]                 )   // acknowledge signal
+//);
+
+assign sys_rdata[1*32+:32] = 32'h0; 
+assign sys_err  [1       ] =  1'b0;
+assign sys_ack  [1       ] =  1'b1;
+assign axi0_clk  = adc_clk ;
+assign axi0_rstn_o = adc_rstn;
+assign axi1_clk  = adc_clk ;
+assign axi1_rstn_o = adc_rstn;
 
 //---------------------------------------------------------------------------------
 //  DAC arbitrary signal generator
@@ -539,5 +553,39 @@ red_pitaya_pwm pwm [4-1:0] (
 
 assign daisy_p_o = 1'bz;
 assign daisy_n_o = 1'bz;
+
+//---------------------------------------------------------------------------------
+//
+//   KWISP acquisition
+//   Copyright (C) 2017  Mario Vretenar
+
+wire  [ 14-1: 0] lfs_a       ;
+wire  [ 14-1: 0] lfs_b       ;
+lfs i_lfs
+(
+  .clk_i           (  adc_clk                    ),  // clock
+  .rstn_i          (  adc_rstn                   ),  // reset - active low
+  .dat_a_i         (  adc_a                      ),  // in 1
+  .dat_b_i         (  adc_b                      ),  // in 2
+  .dat_a_o         (  lfs_a                     ),  // out 1
+  .dat_b_o         (  lfs_b                     ),  // out 2
+  
+  .exp_p_dat_i     (  exp_p_in                   ),  // input data
+  .exp_p_dat_o     (  exp_p_out                  ),  // output data
+  .exp_p_dir_o     (  exp_p_dir                  ),  // 1-output enable
+  .exp_n_dat_i     (  exp_n_in                   ),
+  .exp_n_dat_o     (  exp_n_out                  ),
+  .exp_n_dir_o     (  exp_n_dir                  ),
+
+   // System bus
+  .sys_addr      (  sys_addr                   ),  // address
+  .sys_wdata     (  sys_wdata                  ),  // write data
+  .sys_sel       (  sys_sel                    ),  // write byte select
+  .sys_wen       (  sys_wen[6]                 ),  // write enable
+  .sys_ren       (  sys_ren[6]                 ),  // read enable
+  .sys_rdata     (  sys_rdata[ 6*32+31: 6*32]  ),  // read data
+  .sys_err       (  sys_err[6]                 ),  // error indicator
+  .sys_ack       (  sys_ack[6]                 )   // acknowledge signal
+);
 
 endmodule

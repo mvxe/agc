@@ -113,36 +113,68 @@ assign kp_mult = $signed(error) * $signed(set_kp_i);
 
 
 
+////---------------------------------------------------------------------------------
+////  Integrator
+
+//reg   [    45-1: 0] ki_mult       ;
+//wire  [    49-1: 0] int_sum       ;
+//reg   [    48-1: 0] int_reg       ;
+//wire  [32-ISR-1: 0] int_shr       ;
+
+//always @(posedge clk_i) begin
+//   if (rstn_i == 1'b0) begin
+//      ki_mult  <= {45{1'b0}};
+//      int_reg  <= {48{1'b0}};
+//   end
+//   else begin
+//      ki_mult <= $signed(error) * $signed(set_ki_i) ;
+
+//      if (int_rst_i)
+//         int_reg <= 48'h0; // reset
+//      else if (int_sum[49-1:49-2] == 2'b01) // positive saturation
+//         int_reg <= 48'h7FFFFFFF; // max positive
+//      else if (int_sum[49-1:49-2] == 2'b10) // negative saturation
+//         int_reg <= 48'h80000000; // max negative
+//      else
+//         int_reg <= int_sum[48-1:0]; // use sum as it is
+//   end
+//end
+
+//assign int_sum = $signed(ki_mult) + $signed(int_reg) ;
+//assign int_shr = int_reg[32-1+16:ISR+16] ;
+
+
 
 //---------------------------------------------------------------------------------
 //  Integrator
 
-reg   [    29-1: 0] ki_mult       ;
-wire  [    33-1: 0] int_sum       ;
-reg   [    32-1: 0] int_reg       ;
+reg   [    37-1: 0] ki_mult       ;
+wire  [    41-1: 0] int_sum       ;
+reg   [    40-1: 0] int_reg       ;
 wire  [32-ISR-1: 0] int_shr       ;
 
 always @(posedge clk_i) begin
    if (rstn_i == 1'b0) begin
-      ki_mult  <= {29{1'b0}};
-      int_reg  <= {32{1'b0}};
+      ki_mult  <= {37{1'b0}};
+      int_reg  <= {40{1'b0}};
    end
    else begin
       ki_mult <= $signed(error) * $signed(set_ki_i) ;
 
       if (int_rst_i)
-         int_reg <= 32'h0; // reset
-      else if (int_sum[33-1:33-2] == 2'b01) // positive saturation
-         int_reg <= 32'h7FFFFFFF; // max positive
-      else if (int_sum[33-1:33-2] == 2'b10) // negative saturation
-         int_reg <= 32'h80000000; // max negative
+         int_reg <= 40'h0; // reset
+      else if (int_sum[41-1:41-2] == 2'b01) // positive saturation
+         int_reg <= 40'h7FFFFFFF; // max positive
+      else if (int_sum[41-1:41-2] == 2'b10) // negative saturation
+         int_reg <= 40'h80000000; // max negative
       else
-         int_reg <= int_sum[32-1:0]; // use sum as it is
+         int_reg <= int_sum[40-1:0]; // use sum as it is
    end
 end
 
 assign int_sum = $signed(ki_mult) + $signed(int_reg) ;
-assign int_shr = int_reg[32-1:ISR] ;
+assign int_shr = int_reg[32-1+8:ISR+8] ;
+
 
 
 
