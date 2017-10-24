@@ -35,9 +35,9 @@
 
 struct _par_str{
 	uint32_t cntr_thresh_alpha;			//address: h00
-							// b13-b0 signed int		alpha threshold
+							// b31 : alpha trig edge, b13-b0 : alpha threshold (14 bit signed)
 	uint32_t cntr_thresh_gamma;			//address: h04
-							// b13-b0 signed int		gamma threshold
+							// b31 : gamma trig edge, b13-b0 : gamma threshold (14 bit signed)
 	uint32_t cntr_mintime_alpha;			//address: h08
 							// 32bit unsigned int		alpha min. duration to be counted as an event
 	uint32_t cntr_mintime_gamma;			//address: h0C
@@ -48,16 +48,16 @@ struct _par_str{
 							// b31-0 : number of lost samples (32 bit unsigned)
 	uint32_t mes_in_queue;				//address: h18
 							// b31-16 : maximum number of samples in queue at any time since laste reset (16 bit unsigned) , b15-0 : number of samples currently in queue (16 bit unsigned)											
-	uint32_t out_a_time_shift;			//address: h1C
-							// b7-b0 : used to add a time delay on channel A (8 bit unsigned, 1==1e-8 s)
+	uint32_t delay_len;				//address: h1C
+							// b31 : channel to be delayed, b8-b0 : channel delay (9 bit unsigned, 1==1e-8 s)
 	uint32_t mes_data;				//address: h20
 							// b31 : mes_isd (1=new, 0=empty), b30 : type (0 = alpha, 1 = gamma), b29-16 :  amplitude (14 bit signed), b15-b0 : empty (0s)
-	uint32_t mes_cntr_t0;				//address: h21	
+	uint32_t mes_cntr_t0;				//address: h24	
 							// 32bit unsigned int		time difference from falling threshold of last peak to rising threshold of current peak			
-	uint32_t mes_cntr_t1;				//address: h21	
-							// 32bit unsigned int		time from rising threshold crossing to falling threshold crossing (peak width)	##READING OF THIS REGISTER CLEARS THIS PEAK FROM FIFO##	
-//	uint32_t mes_cntr_t2;				//address: h21
-//							// 32bit unsigned int		time from rising threshold crossing to maximum amplitude (peak max timestamp)	##READING OF THIS REGISTER CLEARS THIS PEAK FROM FIFO##		
+	uint32_t mes_cntr_t1;				//address: h28	
+							// 32bit unsigned int		time from rising threshold crossing to falling threshold crossing (peak width)
+	uint32_t mes_cntr_t2;				//address: h2C
+							// 32bit unsigned int		time from rising threshold crossing to maximum amplitude (peak max timestamp)	##READING OF THIS REGISTER CLEARS THIS PEAK FROM FIFO##		
 };
 
 _par_str *AGC = NULL;	//parameters
@@ -121,7 +121,7 @@ inline unsigned int AGC_get_max_in_queue()
 	return (AGC->mes_in_queue&0xFFFF0000)>>16;
 }
 
-int AGC_setup(int cntr_thresh_alpha, int cntr_thresh_gamma, bool cntr_sign_alpha, bool cntr_sign_gamma, unsigned int cntr_mintime_alpha, unsigned int cntr_mintime_gamma, unsigned char out_a_time_shift)	
+int AGC_setup(int cntr_thresh_alpha, int cntr_thresh_gamma, bool cntr_sign_alpha, bool cntr_sign_gamma, unsigned int cntr_mintime_alpha, unsigned int cntr_mintime_gamma, unsigned int delay_len, bool delay_ch)	
 {
 	if (cntr_thresh_alpha>8191) cntr_thresh_alpha=8191;			//threshold from -8192 to 8191
 	else if (cntr_thresh_alpha<-8192) cntr_thresh_alpha=-8192;		//if threshold is negative the peak is assumed to be inverted
@@ -131,11 +131,11 @@ int AGC_setup(int cntr_thresh_alpha, int cntr_thresh_gamma, bool cntr_sign_alpha
 	AGC->cntr_thresh_gamma = (cntr_thresh_gamma&0x3FFF)+cntr_sign_gamma?0x80000000:0;
 	AGC->cntr_mintime_alpha = cntr_mintime_alpha;				//time is: cntr_mintime_alpha * 8 ns
 	AGC->cntr_mintime_gamma = cntr_mintime_gamma;
-	AGC->out_a_time_shift = out_a_time_shift;
+	AGC->delay_len = (delay_len&0x1FF)+delay_ch?0x80000000:0;		//  0<=delay_len<=511
 	return 0;
 }
 
-inline int AGC_get_sample(bool *isalpha, int *amplitude, unsigned int *cntr_t0, unsigned int *cntr_t1)
+inline int AGC_get_sample(bool *isalpha, int *amplitude, unsigned int *cntr_t0, unsigned int *cntr_t1, unsigned int *cntr_t2)
 {
 	uint32_t temp;
 	temp=AGC->mes_data;
@@ -146,7 +146,7 @@ inline int AGC_get_sample(bool *isalpha, int *amplitude, unsigned int *cntr_t0, 
 	if (*amplitude&0x2000) {*amplitude^=0x2000; *amplitude^=0xFFFFE000;}
 	*cntr_t0=AGC->mes_cntr_t0;
 	*cntr_t1=AGC->mes_cntr_t1;
-//	*cntr_t2=AGC->mes_cntr_t2;
+	*cntr_t2=AGC->mes_cntr_t2;
 	return 0;								//new data was returned
 }
 
