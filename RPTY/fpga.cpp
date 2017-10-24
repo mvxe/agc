@@ -106,36 +106,36 @@ inline int AGC_reset_fifo()
 	return 0;
 }
 
-inline unsigned int AGC_get_num_lost()
+inline unsigned AGC_get_num_lost()
 {
 	return AGC->mes_lost;
 }
 
-inline unsigned int AGC_get_in_queue()	
+inline unsigned AGC_get_in_queue()	
 {
 	return (AGC->mes_in_queue&0x0000FFFF);
 }
 
-inline unsigned int AGC_get_max_in_queue()
+inline unsigned AGC_get_max_in_queue()
 {
 	return (AGC->mes_in_queue&0xFFFF0000)>>16;
 }
 
-int AGC_setup(int cntr_thresh_alpha, int cntr_thresh_gamma, bool cntr_sign_alpha, bool cntr_sign_gamma, unsigned int cntr_mintime_alpha, unsigned int cntr_mintime_gamma, unsigned int delay_len, bool delay_ch)	
+int AGC_setup(int cntr_thresh_alpha, int cntr_thresh_gamma, bool cntr_edge_alpha, bool cntr_edge_gamma, unsigned cntr_mintime_alpha, unsigned cntr_mintime_gamma, unsigned delay_len, bool delay_ch)	
 {
 	if (cntr_thresh_alpha>8191) cntr_thresh_alpha=8191;			//threshold from -8192 to 8191
 	else if (cntr_thresh_alpha<-8192) cntr_thresh_alpha=-8192;		//if threshold is negative the peak is assumed to be inverted
 	if (cntr_thresh_gamma>8191) cntr_thresh_gamma=8191;
 	else if (cntr_thresh_gamma<-8192) cntr_thresh_gamma=-8192;
-	AGC->cntr_thresh_alpha = (cntr_thresh_alpha&0x3FFF)+cntr_sign_alpha?0x80000000:0;
-	AGC->cntr_thresh_gamma = (cntr_thresh_gamma&0x3FFF)+cntr_sign_gamma?0x80000000:0;
+	AGC->cntr_thresh_alpha = (cntr_thresh_alpha&0x3FFF)+cntr_edge_alpha?0x80000000:0;
+	AGC->cntr_thresh_gamma = (cntr_thresh_gamma&0x3FFF)+cntr_edge_gamma?0x80000000:0;
 	AGC->cntr_mintime_alpha = cntr_mintime_alpha;				//time is: cntr_mintime_alpha * 8 ns
 	AGC->cntr_mintime_gamma = cntr_mintime_gamma;
 	AGC->delay_len = (delay_len&0x1FF)+delay_ch?0x80000000:0;		//  0<=delay_len<=511
 	return 0;
 }
 
-inline int AGC_get_sample(bool *isalpha, int *amplitude, unsigned int *cntr_t0, unsigned int *cntr_t1, unsigned int *cntr_t2)
+inline int AGC_get_sample(bool *isalpha, int *amplitude, unsigned *cntr_t0, unsigned *cntr_t1, unsigned *cntr_t2)
 {
 	uint32_t temp;
 	temp=AGC->mes_data;
