@@ -95,7 +95,7 @@ void _load_conf(bool pf)
 	string conffile((istreambuf_iterator<char>(t)), istreambuf_iterator<char>());            //put the conf file into a string
 	
 	if (conffile.size()!=0){
-		char tmpch;
+		char tmpch; int z;
 		size_t pos_alpha_thresh = conffile.find("alpha_thresh(-8192 - 8191):");
 			if (pos_alpha_thresh != string::npos){
 				pos_alpha_thresh+=27;
@@ -105,7 +105,7 @@ void _load_conf(bool pf)
 		size_t pos_alpha_edge = conffile.find("alpha_edge(Rising (R) or Falling (F)):");
 			if (pos_alpha_edge != string::npos){
 				pos_alpha_edge+=38;
-				do sscanf(conffile.substr(pos_alpha_edge).c_str(), "%c", &tmpch);
+				z=0; do {sscanf(conffile.substr(pos_alpha_edge+z).c_str(), "%c", &tmpch); z++;}
 				while (isspace(tmpch));
 				if (tmpch=='R') alpha_edge=0;
 				else if (tmpch=='F') alpha_edge=1;
@@ -121,7 +121,7 @@ void _load_conf(bool pf)
 		size_t pos_gamma_edge = conffile.find("gamma_edge(Rising (R) or Falling (F)):");
 			if (pos_gamma_edge != string::npos){
 				pos_gamma_edge+=38;
-				do sscanf(conffile.substr(pos_gamma_edge).c_str(), "%c", &tmpch);
+				z=0; do {sscanf(conffile.substr(pos_gamma_edge+z).c_str(), "%c", &tmpch); z++;}
 				while (isspace(tmpch));
 				if (tmpch=='R') gamma_edge=0;
 				else if (tmpch=='F') gamma_edge=1;
@@ -149,7 +149,7 @@ void _load_conf(bool pf)
 		size_t pos_delay_ch = conffile.find("delay_ch(A or B):");
 			if (pos_delay_ch != string::npos){
 				pos_delay_ch+=17;
-				do sscanf(conffile.substr(pos_delay_ch).c_str(), "%c", &tmpch);
+				z=0; do {sscanf(conffile.substr(pos_delay_ch+z).c_str(), "%c", &tmpch); z++;}
 				while (isspace(tmpch));
 				if (tmpch=='A') delay_ch=0;
 				else if (tmpch=='B') delay_ch=1;
@@ -283,6 +283,26 @@ int main(int argc,char *argv[]){
 
 	system ("mkdir measurements -p");
 	system ("cat red_pitaya.bin > /dev/xdevcfg");
+	
+	int ENmax_alpha;
+	if (!alpha_edge){	//rising edge
+		ENmax_alpha=8191-alpha_thresh+1;	//num of elements in the array
+	}else{
+		ENmax_alpha=-(-8192-alpha_thresh)+1;	//num of elements in the array
+	}
+	unsigned alpha_binN = ENmax_alpha/step_alpha+1;
+	int ENmax_gamma;
+	if (!gamma_edge){
+		ENmax_gamma=8191-gamma_thresh+1;	//num of elements in the array
+	}else{
+		ENmax_gamma=-(-8192-gamma_thresh)+1;	//num of elements in the array
+	}
+	unsigned gamma_binN = ENmax_gamma/step_gamma+1;
+	
+	long unsigned memreq;
+	memreq=ENmax_alpha+ENmax_gamma+4*2000+alpha_binN*gamma_binN*interval_uint;
+	memreq*=sizeof(unsigned);
+	printf("Total memory required (both in RAM and SD): %lu MB. MAKE SURE IT IS AVAILABLE BEFORE PROCEEDING.\n",memreq/1024/1024);
 	if(pf){	printf("Press any key to continue...\n");
 		scanf("%*c");
 	}
@@ -302,12 +322,6 @@ int main(int argc,char *argv[]){
        
         FILE* ifile;
 		//####generate alpha energy array
-	int ENmax_alpha;
-	if (!alpha_edge){	//rising edge
-		ENmax_alpha=8191-alpha_thresh+1;	//num of elements in the array
-	}else{
-		ENmax_alpha=-(-8192-alpha_thresh)+1;	//num of elements in the array
-	}
 	ifile = fopen("measurements/alpha.dat","rb");
 	unsigned *alpha_array = new unsigned[ENmax_alpha];
 	if (ifile!=NULL) {
@@ -315,15 +329,8 @@ int main(int argc,char *argv[]){
 		fclose(ifile);
 	}
 	else for (int i=0;i!=ENmax_alpha;i++)alpha_array[i]=0;	// else fill with 0
-	unsigned alpha_binN = ENmax_alpha/step_alpha+1;
 	
 		//####generate gamma energy array
-	int ENmax_gamma;
-	if (!gamma_edge){
-		ENmax_gamma=8191-gamma_thresh+1;	//num of elements in the array
-	}else{
-		ENmax_gamma=-(-8192-gamma_thresh)+1;	//num of elements in the array
-	}
 	ifile = fopen("measurements/gamma.dat","rb");
 	unsigned *gamma_array = new unsigned[ENmax_gamma];
 	if (ifile!=NULL) {
@@ -331,43 +338,42 @@ int main(int argc,char *argv[]){
 		fclose(ifile);
 	}
 	else for (int i=0;i!=ENmax_gamma;i++)gamma_array[i]=0;	// else fill with 0
-	unsigned gamma_binN = ENmax_gamma/step_gamma+1;
 	
 		//####generate alpha ratio0 array
 	ifile = fopen("measurements/alpha_ratio0.dat","rb");
-	unsigned *alpha_ratio0_array = new unsigned[2000];
+	unsigned *alpha_ratio0_array = new unsigned[2001];
 	if (ifile!=NULL) {
-		fread (alpha_ratio0_array,sizeof(unsigned),2000,ifile);	// read existing file
+		fread (alpha_ratio0_array,sizeof(unsigned),2001,ifile);	// read existing file
 		fclose(ifile);
 	}
-	else for (int i=0;i!=2000;i++)alpha_ratio0_array[i]=0;	// else fill with 0
+	else for (int i=0;i!=2001;i++)alpha_ratio0_array[i]=0;	// else fill with 0
 	
 		//####generate alpha rratio1 array
 	ifile = fopen("measurements/alpha_ratio1.dat","rb");
-	unsigned *alpha_ratio1_array = new unsigned[2000];
+	unsigned *alpha_ratio1_array = new unsigned[2001];
 	if (ifile!=NULL) {
-		fread (alpha_ratio1_array,sizeof(unsigned),2000,ifile);	// read existing file
+		fread (alpha_ratio1_array,sizeof(unsigned),2001,ifile);	// read existing file
 		fclose(ifile);
 	}
-	else for (int i=0;i!=2000;i++)alpha_ratio1_array[i]=0;	// else fill with 0
+	else for (int i=0;i!=2001;i++)alpha_ratio1_array[i]=0;	// else fill with 0
 		
 		//####generate gamma ratio0 array
 	ifile = fopen("measurements/gamma_ratio0.dat","rb");
-	unsigned *gamma_ratio0_array = new unsigned[2000];
+	unsigned *gamma_ratio0_array = new unsigned[2001];
 	if (ifile!=NULL) {
-		fread (gamma_ratio0_array,sizeof(unsigned),2000,ifile);	// read existing file
+		fread (gamma_ratio0_array,sizeof(unsigned),2001,ifile);	// read existing file
 		fclose(ifile);
 	}
-	else for (int i=0;i!=2000;i++)gamma_ratio0_array[i]=0;	// else fill with 0
+	else for (int i=0;i!=2001;i++)gamma_ratio0_array[i]=0;	// else fill with 0
 	
 		//####generate gamma rratio1 array
 	ifile = fopen("measurements/gamma_ratio1.dat","rb");
-	unsigned *gamma_ratio1_array = new unsigned[2000];
+	unsigned *gamma_ratio1_array = new unsigned[2001];
 	if (ifile!=NULL) {
-		fread (gamma_ratio1_array,sizeof(unsigned),2000,ifile);	// read existing file
+		fread (gamma_ratio1_array,sizeof(unsigned),2001,ifile);	// read existing file
 		fclose(ifile);
 	}
-	else for (int i=0;i!=2000;i++)gamma_ratio1_array[i]=0;	// else fill with 0
+	else for (int i=0;i!=2001;i++)gamma_ratio1_array[i]=0;	// else fill with 0
 	
 		//####generate time arrays
 	unsigned*** bins = new unsigned**[alpha_binN];
@@ -403,10 +409,10 @@ int main(int argc,char *argv[]){
 		if (!AGC_get_sample(&isalpha,&amplitude,&cntr_t0,&cntr_t1,&cntr_t2)){
 			if (isalpha){
 				N_alpha++;
-				ratio[0]=100*log(cntr_t1/(abs(amplitude-alpha_thresh)+1));
+				ratio[0]=100*log((double)cntr_t1/(abs(amplitude-alpha_thresh)+1));
 				if (ratio[0]< -1000) ratio[0]=-1000;
 				else if (ratio[0]>1000) ratio[0]=1000;
-				ratio[1]=100*log(cntr_t1/(cntr_t0+1));
+				ratio[1]=100*log((double)cntr_t1/(cntr_t0+1));
 				if (ratio[0]< -1000) ratio[0]=-1000;
 				else if (ratio[0]>1000) ratio[0]=1000;
 				
@@ -472,7 +478,7 @@ int main(int argc,char *argv[]){
 			if (endack) break;
 			endack_mx.unlock();
 			//TODO put in separate thread to speed up
-			if(pf)printf ("\033[2JPress 'e' to stop acquistion.\nN_alpha=%llu\nN_gamma=%llu\nelapsed time=%llu s\nRPTY lost peaks:%u(max in queue %u/200)\n",N_alpha,N_gamma,counter/125000000,AGC_get_num_lost(),AGC_get_max_in_queue());
+			if(pf)printf ("\033[2JPress 'e' to stop acquistion.\nN_alpha=%llu\nN_gamma=%llu\nelapsed time=%llu s\nRPTY lost peaks:%u(max in queue %u/150)\n",N_alpha,N_gamma,counter/125000000,AGC_get_num_lost(),AGC_get_max_in_queue());
 			i=0;
 		}
 		
@@ -481,11 +487,11 @@ int main(int argc,char *argv[]){
 	double vtime;
 	if (pf) {
 		time(&Tend);
-		vtime = difftime(Tstart,Tend);
+		vtime = difftime(Tend,Tstart);
 	}
 	else vtime=atof(argv[1]);
 	
-	if(pf)printf ("\033[2JAcquistion ended.\nN_alpha=%llu\nN_gamma=%llu\nelapsed time=%llu s\nRPTY lost peaks:%u(max in queue %u/200)\n",N_alpha,N_gamma,counter/125000000,AGC_get_num_lost(),AGC_get_max_in_queue());
+	if(pf)printf ("\033[2JAcquistion ended.\nN_alpha=%llu\nN_gamma=%llu\nelapsed time=%llu s\nRPTY lost peaks:%u(max in queue %u/150)\n",N_alpha,N_gamma,counter/125000000,AGC_get_num_lost(),AGC_get_max_in_queue());
 	
 	FILE* ofile;
 	
@@ -493,43 +499,43 @@ int main(int argc,char *argv[]){
 	ofile=fopen("measurements/alpha.dat","wb");
 	fwrite (alpha_array,sizeof(unsigned),ENmax_alpha,ofile);
 	fclose(ofile);
-	if(pf)printf("done! format is '%uint32' starting from zero. One line is one channel.\n");
-	delete[] alpha_array;
+	if(pf)printf("done! format is \'%%uint32\' starting from zero. One line is one channel.\n");
+//	delete[] alpha_array;
 
 	if(pf)printf("Saving gamma...");
 	ofile=fopen("measurements/gamma.dat","wb");
 	fwrite (gamma_array,sizeof(unsigned),ENmax_gamma,ofile);
 	fclose(ofile);
-	if(pf)printf("done! format is '%uint32' starting from zero. One line is one channel.\n");
-	delete[] gamma_array;
+	if(pf)printf("done! format is \'%%uint32\' starting from zero. One line is one channel.\n");
+//	delete[] gamma_array;
 
 	if(pf)printf("Saving alpha_ratio0...");
 	ofile=fopen("measurements/alpha_ratio0.dat","wb");
-	fwrite (alpha_ratio0_array,sizeof(unsigned),2000,ofile);
+	fwrite (alpha_ratio0_array,sizeof(unsigned),2001,ofile);
 	fclose(ofile);
-	if(pf)printf("done! format is '%uint32' starting from -1000. One line is one ratio, up to 1000.\n");
-	delete[] alpha_ratio0_array;
+	if(pf)printf("done! format is \'%%uint32\' starting from -1000. One line is one ratio, up to 1000.\n");
+//	delete[] alpha_ratio0_array;
 	
 	if(pf)printf("Saving alpha_ratio1...");
 	ofile=fopen("measurements/alpha_ratio1.dat","wb");
-	fwrite (alpha_ratio1_array,sizeof(unsigned),2000,ofile);
+	fwrite (alpha_ratio1_array,sizeof(unsigned),2001,ofile);
 	fclose(ofile);
-	if(pf)printf("done! format is '%uint32' starting from -1000. One line is one ratio, up to 1000\n");
-	delete[] alpha_ratio1_array;
+	if(pf)printf("done! format is \'%%uint32\' starting from -1000. One line is one ratio, up to 1000.\n");
+//	delete[] alpha_ratio1_array;
 	
 	if(pf)printf("Saving gamma_ratio0...");
 	ofile=fopen("measurements/gamma_ratio0.dat","wb");
-	fwrite (gamma_ratio0_array,sizeof(unsigned),2000,ofile);
+	fwrite (gamma_ratio0_array,sizeof(unsigned),2001,ofile);
 	fclose(ofile);
-	if(pf)printf("done! format is '%uint32' starting from -1000. One line is one ratio, up to 1000\n");
-	delete[] gamma_ratio0_array;
+	if(pf)printf("done! format is \'%%uint32\' starting from -1000. One line is one ratio, up to 1000.\n");
+//	delete[] gamma_ratio0_array;
 	
 	if(pf)printf("Saving gamma_ratio1...");
 	ofile=fopen("measurements/gamma_ratio1.dat","wb");
-	fwrite (gamma_ratio1_array,sizeof(unsigned),2000,ofile);
+	fwrite (gamma_ratio1_array,sizeof(unsigned),2001,ofile);
 	fclose(ofile);
-	if(pf)printf("done! format is '%uint32' starting from -1000. One line is one ratio, up to 1000\n");
-	delete[] gamma_ratio1_array;
+	if(pf)printf("done! format is \'%%uint32\' starting from -1000. One line is one ratio, up to 1000.\n");
+//	delete[] gamma_ratio1_array;
 	
 	if(pf)printf("Saving time...");
 	for (int i=0; i!=alpha_binN;i++) {
@@ -538,16 +544,16 @@ int main(int argc,char *argv[]){
 			ofile = fopen(fname.c_str(),"wb");
 			fwrite (bins[i][j],sizeof(unsigned),interval_uint,ofile);
 			fclose(ofile);
-			delete[] bins[i][j];
+//			delete[] bins[i][j];
 		}
-		delete[] bins[i];
+//		delete[] bins[i];
 	}
-	delete[] bins;
+//	delete[] bins;
 	if(pf)printf("done! format is '%uint32' starting from 0. One line is 8ns.\n");
 	
 	if(pf)printf("Saving duration...");
 	ofile=fopen("measurements/duration.txt","a");
-	fprintf(ofile,"+%lf seconds\n",vtime);
+	fprintf(ofile,"+%.2lf seconds\n",vtime);
 	fclose(ofile);
 	
 	AGC_exit();

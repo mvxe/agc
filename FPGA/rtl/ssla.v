@@ -49,8 +49,8 @@ module lfs
 
 reg signed [ 13: 0] out_a;		//output data ch A
 reg signed [ 13: 0] out_b;		//output data ch B
-wire signed  [ 13: 0] in_a;		//input data ch A
-wire signed  [ 13: 0] in_b;		//input data ch B
+wire signed [ 13: 0] in_a;		//input data ch A
+wire signed [ 13: 0] in_b;		//input data ch B
 assign dat_a_o = out_a;
 assign dat_b_o = out_b;
 assign in_a = dat_a_i;
@@ -60,18 +60,17 @@ assign in_b = dat_b_i;
 
 ////-------------------------------------- Main ---------------------------------------////
 
-`define FIFO_size 150
+`define FIFO_size 250
 
 reg signed [ 13: 0] cntr_thresh_alpha;
 reg                 cntr_sign_alpha;
 reg signed [ 13: 0] cntr_thresh_gamma;
 reg                 cntr_sign_gamma;
-reg  [ 31: 0] cntr_mintime_alpha;
-reg  [ 31: 0] cntr_mintime_gamma;
+reg  [ 15: 0] cntr_mintime_alpha;
+reg  [ 15: 0] cntr_mintime_gamma;
 
 reg [ 31: 0] cntr_t0_buf [0:`FIFO_size-1];
-reg [ 31: 0] cntr_t1_buf [0:`FIFO_size-1];
-reg [ 31: 0] cntr_t2_buf [0:`FIFO_size-1];
+reg [ 15: 0] cntr_t1_buf [0:`FIFO_size-1];
 reg signed [ 13: 0] cntr_amp_buf [0:`FIFO_size-1];
 reg          cntr_type_buf [0:`FIFO_size-1];		//0 means alpha, 1 means gamma
 reg 	     cntr_isd_buf [0:`FIFO_size-1];		//indicates if this element (of all four arrays) contains any data
@@ -95,13 +94,11 @@ reg [ 15: 0] max_mes_in_FIFO;
 
 reg [ 31: 0] cntr_t0;
 reg signed [ 13: 0] cntr_max_alpha;
-reg [ 31: 0] cntr_t1_alpha;
-reg [ 31: 0] cntr_t2_alpha;
+reg [ 15: 0] cntr_t1_alpha;
 reg cntr_alpha_ongoing;
 reg cntr_alpha_saveflag;
 reg signed [ 13: 0] cntr_max_gamma;
-reg [ 31: 0] cntr_t1_gamma;
-reg [ 31: 0] cntr_t2_gamma;
+reg [ 15: 0] cntr_t1_gamma;
 reg cntr_gamma_ongoing;
 reg cntr_gamma_saveflag;
 reg tmpreg;
@@ -137,13 +134,11 @@ always @(posedge clk_i) begin
 		
 		cntr_t0 <= 32'd0;
 		cntr_max_alpha  <= 14'sd0;
-		cntr_t1_alpha <= 32'd0;
-		cntr_t2_alpha <= 32'd0;
+		cntr_t1_alpha <= 16'd0;
 		cntr_alpha_ongoing <= 1'd0;
 		cntr_alpha_saveflag <= 1'd0;
 		cntr_max_gamma  <= 14'sd0;
-		cntr_t1_gamma <= 32'd0;
-		cntr_t2_gamma <= 32'd0;
+		cntr_t1_gamma <= 16'd0;
 		cntr_gamma_ongoing <= 1'd0;
 		cntr_gamma_saveflag <= 1'd0;
 		
@@ -176,7 +171,6 @@ always @(posedge clk_i) begin
 		else if ((cntr_isd_buf[0]==1'd0) && (cntr_alpha_saveflag == 1'b1)) begin
 			cntr_t0_buf[0] <= cntr_t0 - 32'd1;
 			cntr_t1_buf[0] <= cntr_t1_alpha;		//FIFO first element
-			cntr_t2_buf[0] <= cntr_t2_alpha;
 			cntr_amp_buf[0] <= cntr_max_alpha;
 			cntr_isd_buf[0] <= 1'd1;
 			cntr_type_buf[0] <= 1'd0;			//alpha
@@ -188,7 +182,6 @@ always @(posedge clk_i) begin
 		else if (cntr_isd_buf[0]==1'd0) begin
 			cntr_t0_buf[0] <= cntr_t0 - 32'd1;
 			cntr_t1_buf[0] <= cntr_t1_gamma;		//FIFO first element
-			cntr_t2_buf[0] <= cntr_t2_gamma;
 			cntr_amp_buf[0] <= cntr_max_gamma;
 			cntr_isd_buf[0] <= 1'd1;
 			cntr_type_buf[0] <= 1'd1;			//gamma
@@ -212,19 +205,15 @@ always @(posedge clk_i) begin
 		
 		if ( (cntr_alpha_saveflag == 1'd0) && (((!cntr_sign_alpha) && (din_a >= cntr_thresh_alpha)) || ((cntr_sign_alpha) && (din_a <= cntr_thresh_alpha))) ) begin		//alpha adc over threshold
 			if (cntr_alpha_ongoing == 1'd1) begin															
-				if ( ((!cntr_sign_alpha) && (din_a > cntr_max_alpha)) || ((cntr_sign_alpha) && (din_a < cntr_max_alpha)) ) begin					//new maxval found
+				if ( ((!cntr_sign_alpha) && (din_a > cntr_max_alpha)) || ((cntr_sign_alpha) && (din_a < cntr_max_alpha)) )						//new maxval found
 					cntr_max_alpha <= din_a;
-					cntr_t2_alpha <= 32'd0;
-				end
-				else	cntr_t2_alpha <= cntr_t2_alpha + 32'd1;
-				
-				cntr_t1_alpha <= cntr_t1_alpha + 32'd1;
+				if (cntr_t1_alpha!=16'd65535)
+					cntr_t1_alpha <= cntr_t1_alpha + 16'd1;
 			end
 			else begin						//if its not ongoing we start it
 				cntr_alpha_ongoing <= 1'd1;
-				cntr_t1_alpha <= 32'd0;
+				cntr_t1_alpha <= 16'd0;
 				cntr_max_alpha <= din_a;
-				cntr_t2_alpha <= 32'd0;
 			end
 		end
 		else if (cntr_alpha_ongoing == 1'd1) begin			//if it is ongoing but we went below threshold
@@ -234,19 +223,15 @@ always @(posedge clk_i) begin
 		
 		if ( (cntr_gamma_saveflag == 1'd0) && (((!cntr_sign_gamma) && (din_b >= cntr_thresh_gamma)) || ((cntr_sign_gamma) && (din_b <= cntr_thresh_gamma))) ) begin
 			if (cntr_gamma_ongoing == 1'd1) begin															
-				if ( ((!cntr_sign_gamma) && (din_b > cntr_max_gamma)) || ((cntr_sign_gamma) && (din_b < cntr_max_gamma)) ) begin
+				if ( ((!cntr_sign_gamma) && (din_b > cntr_max_gamma)) || ((cntr_sign_gamma) && (din_b < cntr_max_gamma)) )
 					cntr_max_gamma <= din_b;
-					cntr_t2_gamma <= 32'd0;
-				end
-				else	cntr_t2_gamma <= cntr_t2_gamma + 32'd1;
-				
-				cntr_t1_gamma <= cntr_t1_gamma + 32'd1;
+				if (cntr_t1_gamma!=16'd65535)
+					cntr_t1_gamma <= cntr_t1_gamma + 16'd1;
 			end
 			else begin			
 				cntr_gamma_ongoing <= 1'd1;
-				cntr_t1_gamma <= 32'd0;
+				cntr_t1_gamma <= 16'd0;
 				cntr_max_gamma <= din_b;
-				cntr_t2_gamma <= 32'd0;
 			end
 		end
 		else if (cntr_gamma_ongoing == 1'd1) begin	
@@ -260,13 +245,11 @@ always @(posedge clk_i) begin
 			if ((cntr_isd_buf[i+1]==1'd0)&&(cntr_isd_buf[i]==1'd1))  begin
 				cntr_t0_buf[i+1] <= cntr_t0_buf[i];
 				cntr_t1_buf[i+1] <= cntr_t1_buf[i];
-				cntr_t2_buf[i+1] <= cntr_t2_buf[i];
 				cntr_amp_buf[i+1] <= cntr_amp_buf[i];
 				cntr_type_buf[i+1] <= cntr_type_buf[i];
 				cntr_isd_buf[i+1] <= cntr_isd_buf[i];
 				cntr_t0_buf[i] <= 32'd0;
-				cntr_t1_buf[i] <= 32'd0;
-				cntr_t2_buf[i] <= 32'd0;
+				cntr_t1_buf[i] <= 16'd0;
 				cntr_amp_buf[i] <= 14'sd0;
 				cntr_type_buf[i] <= 1'd0;
 				cntr_isd_buf[i] <= 1'd0;
@@ -287,8 +270,8 @@ always @(posedge clk_i) begin
 		cntr_sign_alpha <= 1'd0;			//0 == rising edge trigger
 		cntr_thresh_gamma <= 14'sd8191;
 		cntr_sign_gamma <= 1'd0;
-		cntr_mintime_alpha <= 32'd4294967295;
-		cntr_mintime_gamma <= 32'd4294967295;
+		cntr_mintime_alpha <= 16'd65535;
+		cntr_mintime_gamma <= 16'd65535;
 		delay_len <= 9'd0;
 		delay_ch <= 1'd0;
 		reset_fifo <= 1'd0;
@@ -299,21 +282,21 @@ always @(posedge clk_i) begin
 			casez (sys_addr[19:0])
 				20'h0000	: begin 	
 							cntr_thresh_alpha <= sys_wdata[13:0];
-				        	  	cntr_sign_alpha <= sys_wdata[31];
+				        	  	cntr_sign_alpha <= sys_wdata[14];
 				        	  end
 				20'h0004	: begin	
 							cntr_thresh_gamma <= sys_wdata[13:0];
-				        	  	cntr_sign_gamma <= sys_wdata[31];	
+				        	  	cntr_sign_gamma <= sys_wdata[14];	
 				        	  end		
-				20'h0008	: 	cntr_mintime_alpha <= sys_wdata[31:0];
-				20'h000C	: 	cntr_mintime_gamma <= sys_wdata[31:0];
+				20'h0008	: 	cntr_mintime_alpha <= sys_wdata[15:0];
+				20'h000C	: 	cntr_mintime_gamma <= sys_wdata[15:0];
 				
 				20'h0010	: 	reset_fifo <= ~reset_fifo;
 				//20'h0014	used
 				//20'h0018	used
 				20'h001C	: begin
 							delay_len <= sys_wdata[8:0];
-							delay_ch <= sys_wdata[31];
+							delay_ch <= sys_wdata[9];
 						  end	
 			endcase
 
@@ -333,15 +316,15 @@ if (rstn_i == 1'b0) begin
 end else begin
    sys_err <= 1'b0 ;
 	casez (sys_addr[19:0])
-		20'h0000		: begin sys_ack <= sys_en;	sys_rdata <= {cntr_sign_alpha, {32-15{1'b0}}, cntr_thresh_alpha}; end
-		20'h0004		: begin sys_ack <= sys_en;	sys_rdata <= {cntr_sign_gamma, {32-15{1'b0}}, cntr_thresh_gamma}; end
-		20'h0008		: begin sys_ack <= sys_en;	sys_rdata <= cntr_mintime_alpha	; end
-		20'h000C		: begin sys_ack <= sys_en;	sys_rdata <= cntr_mintime_gamma	; end
+		20'h0000		: begin sys_ack <= sys_en;	sys_rdata <= {{32-15{1'b0}}, cntr_sign_alpha, cntr_thresh_alpha}; end
+		20'h0004		: begin sys_ack <= sys_en;	sys_rdata <= {{32-15{1'b0}}, cntr_sign_gamma, cntr_thresh_gamma}; end
+		20'h0008		: begin sys_ack <= sys_en;	sys_rdata <= {{32-16{1'b0}}, cntr_mintime_alpha} ; end
+		20'h000C		: begin sys_ack <= sys_en;	sys_rdata <= {{32-16{1'b0}}, cntr_mintime_gamma} ; end
 
 		//20'h0010	used
 		20'h0014		: begin sys_ack <= sys_en;	sys_rdata <= mes_lost; end
 		20'h0018		: begin sys_ack <= sys_en;	sys_rdata <= {max_mes_in_FIFO,mes_in_FIFO}; end
-		20'h001C		: begin sys_ack <= sys_en;	sys_rdata <= {delay_ch, {32-10{1'b0}}, delay_len }; end
+		20'h001C		: begin sys_ack <= sys_en;	sys_rdata <= {{32-10{1'b0}}, delay_ch, delay_len }; end
 		
 		20'h0020		: begin 
 						sys_ack <= sys_en;	
@@ -353,12 +336,9 @@ end else begin
 					  end
 		20'h0028		: begin 
 						sys_ack <= sys_en;	
-						sys_rdata <= cntr_t1_buf[`FIFO_size-1]; 
-					  end
-		20'h002C		: begin 
-						sys_ack <= sys_en;	
-						sys_rdata <= cntr_t2_buf[`FIFO_size-1]; 	//ALWAYS read this buffer last as it will delete the FIFO element
+						sys_rdata <= {{32-16{1'b0}},cntr_t1_buf[`FIFO_size-1];} 	//ALWAYS read this buffer last as it will delete the FIFO element
 						if (sys_ren && (cntr_isd_buf[`FIFO_size-1]==1'd1)) mes_received <= ~mes_received; 	//last element has been read
+						
 					  end
 		
 
