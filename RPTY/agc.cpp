@@ -34,7 +34,6 @@ using namespace std;
 
 struct peak{
 	long long unsigned time;
-	int ratio[2];
 	int amp;
 };
 
@@ -48,10 +47,6 @@ double interval;unsigned interval_uint;
 unsigned delay_len;
 bool delay_ch;
 bool triggerisalpha;
-int ratio0_lo[2];	//100*ln(t1/amp)
-int ratio0_up[2];	//[0]=alpha, [1]=gamma
-int ratio1_lo[2];	//100*ln(t1/t2)
-int ratio1_up[2];
 unsigned step_alpha;
 unsigned step_gamma;
 
@@ -62,27 +57,18 @@ void _gen_conf(void)
 	conffile=fopen("agc_conf.txt","w");
 	fprintf(conffile,
 		"Thresholds are minimum intensities required for trigger.\n"
-		"alpha_thresh(-8192 - 8191):\t8191\n"
+		"alpha_thresh(-8192 - 8191):\t100\n"
 		"alpha_edge(Rising (R) or Falling (F)):\tR\n"
-		"gamma_thresh(-8192 - 8191):\t8191\n"
+		"gamma_thresh(-8192 - 8191):\t100\n"
 		"gamma_edge(Rising (R) or Falling (F)):\tR\n"
 		"Mintime is the minimum duration from threshold rising(falling) pass to falling(rising) pass for the peak to be registered. (in seconds)\n"
-		"alpha_mintime(0 - 34.3597):\t10\n"
-		"gamma_mintime(0 - 34.3597):\t10\n"
+		"alpha_mintime(0 - 0.00052428):\t0.00001\n"
+		"gamma_mintime(0 - 0.00052428):\t0.00001\n"
 		"Add a time delay to the specified channel. (1==1e-8 s)\n"
 		"delay_len(0 - 511):\t0\n"
 		"delay_ch(A or B):\tA\n"
-		"\n"
 		"Observed interval after trigger event(0 - 34.3597)(in seconds):\t0.00001\n"
 		"Trigger is alpha(y/n):\ty\n"
-		"Lower t1/amp alpha ratio (100*ln(rat)):\t-1000\n"
-		"Upper t1/amp alpha ratio (100*ln(rat)):\t1000\n"
-		"Lower t1/t2 alpha ratio (100*ln(rat)):\t-1000\n"
-		"Upper t1/t2 alpha ratio (100*ln(rat)):\t1000\n"
-		"Lower t1/amp gamma ratio (100*ln(rat)):\t-1000\n"
-		"Upper t1/amp gamma ratio (100*ln(rat)):\t1000\n"
-		"Lower t1/t2 gamma ratio (100*ln(rat)):\t-1000\n"
-		"Upper t1/t2 gamma ratio (100*ln(rat)):\t1000\n"
 		"Time resolved alpha amplitude step:\t100000\n"
 		"Time resolved gamma amplitude step:\t100000\n"
 		);
@@ -128,15 +114,15 @@ void _load_conf(bool pf)
 				else {printf("Error in gamma_edge. Must be F or R!\n"); exit(0);}
 				if(pf)printf("gamma_edge=%c\n",gamma_edge?'F':'R');
 			}else {printf("Error in gamma_edge. Delete file to regenerate from template.\n"); exit(0);}
-		size_t pos_alpha_mintime = conffile.find("alpha_mintime(0 - 34.3597):");
+		size_t pos_alpha_mintime = conffile.find("alpha_mintime(0 - 0.00052428):");
 			if (pos_alpha_mintime != string::npos){
-				pos_alpha_mintime+=27;
+				pos_alpha_mintime+=30;
 				sscanf(conffile.substr(pos_alpha_mintime).c_str(), "%lf", &alpha_mintime);
 				if(pf)printf("alpha_mintime=%lf\n",alpha_mintime);
 			}else {printf("Error in alpha_mintime. Delete file to regenerate from template.\n"); exit(0);}
-		size_t pos_gamma_mintime = conffile.find("gamma_mintime(0 - 34.3597):");
+		size_t pos_gamma_mintime = conffile.find("gamma_mintime(0 - 0.00052428):");
 			if (pos_gamma_mintime != string::npos){
-				pos_gamma_mintime+=27;
+				pos_gamma_mintime+=30;
 				sscanf(conffile.substr(pos_gamma_mintime).c_str(), "%lf", &gamma_mintime);
 				if(pf)printf("gamma_mintime=%lf\n",gamma_mintime);
 			}else {printf("Error in gamma_mintime. Delete file to regenerate from template.\n"); exit(0);}
@@ -170,58 +156,6 @@ void _load_conf(bool pf)
 				triggerisalpha=((tmp[0]=='y')||(tmp[0]=='Y'))?true:false;
 				if(pf)printf("triggerisalpha=%c\n",triggerisalpha?'y':'n');
 			}else {printf("Error in triggerisalpha. Delete file to regenerate from template.\n"); exit(0);}
-		size_t pos_ratio0_loa= conffile.find("Lower t1/amp alpha ratio (100*ln(rat)):");
-			if (pos_ratio0_loa != string::npos){
-				pos_ratio0_loa+=39;
-				sscanf(conffile.substr(pos_ratio0_loa).c_str(), "%d", &ratio0_lo[0]);
-				if(pf)printf("alpha ratio0_lo (100*ln(rat)) =%d\n",ratio0_lo[0]);
-			}else {printf("Error in alpha ratio0_lo. Delete file to regenerate from template.\n"); exit(0);}
-		size_t pos_ratio0_upa= conffile.find("Upper t1/amp alpha ratio (100*ln(rat)):");
-			if (pos_ratio0_upa != string::npos){
-				pos_ratio0_upa+=39;
-				sscanf(conffile.substr(pos_ratio0_upa).c_str(), "%d", &ratio0_up[0]);
-				if(ratio0_up[0]<=ratio0_lo[0]) {printf("Error: ratio0_up<=ratio0_lo.\n"); exit(0);}
-				if(pf)printf("alpha ratio0_up (100*ln(rat)) =%d\n",ratio0_up[0]);
-			}else {printf("Error in alpha ratio0_up. Delete file to regenerate from template.\n"); exit(0);}
-		size_t pos_ratio1_loa= conffile.find("Lower t1/t2 alpha ratio (100*ln(rat)):");
-			if (pos_ratio1_loa != string::npos){
-				pos_ratio1_loa+=38;
-				sscanf(conffile.substr(pos_ratio1_loa).c_str(), "%d", &ratio1_lo[0]);
-				if(pf)printf("alpha ratio1_lo (100*ln(rat)) =%d\n",ratio1_lo[0]);
-			}else {printf("Error in alpha ratio1_lo. Delete file to regenerate from template.\n"); exit(0);}
-		size_t pos_ratio1_upa= conffile.find("Upper t1/t2 alpha ratio (100*ln(rat)):");
-			if (pos_ratio1_upa != string::npos){
-				pos_ratio1_upa+=38;
-				sscanf(conffile.substr(pos_ratio1_upa).c_str(), "%d", &ratio1_up[0]);
-				if(ratio1_up[0]<=ratio1_lo[0]) {printf("Error: alpha ratio1_up<=ratio1_lo.\n"); exit(0);}
-				if(pf)printf("alpha ratio1_up (100*ln(rat)) =%d\n",ratio1_up[0]);
-			}else {printf("Error in alpha ratio1_up. Delete file to regenerate from template.\n"); exit(0);}
-		size_t pos_ratio0_log= conffile.find("Lower t1/amp gamma ratio (100*ln(rat)):");
-			if (pos_ratio0_log != string::npos){
-				pos_ratio0_log+=39;
-				sscanf(conffile.substr(pos_ratio0_log).c_str(), "%d", &ratio0_lo[1]);
-				if(pf)printf("gamma ratio0_lo (100*ln(rat)) =%d\n",ratio0_lo[1]);
-			}else {printf("Error in gamma ratio0_lo. Delete file to regenerate from template.\n"); exit(0);}
-		size_t pos_ratio0_upg= conffile.find("Upper t1/amp gamma ratio (100*ln(rat)):");
-			if (pos_ratio0_upg != string::npos){
-				pos_ratio0_upg+=39;
-				sscanf(conffile.substr(pos_ratio0_upg).c_str(), "%d", &ratio0_up[1]);
-				if(ratio0_up[1]<=ratio0_lo[1]) {printf("Error: gamma ratio0_up<=ratio0_lo.\n"); exit(0);}
-				if(pf)printf("gamma ratio0_up (100*ln(rat)) =%d\n",ratio0_up[1]);
-			}else {printf("Error in gamma ratio0_up. Delete file to regenerate from template.\n"); exit(0);}
-		size_t pos_ratio1_log= conffile.find("Lower t1/t2 gamma ratio (100*ln(rat)):");
-			if (pos_ratio1_log != string::npos){
-				pos_ratio1_log+=38;
-				sscanf(conffile.substr(pos_ratio1_log).c_str(), "%d", &ratio1_lo[1]);
-				if(pf)printf("gamma ratio1_lo (100*ln(rat)) =%d\n",ratio1_lo[1]);
-			}else {printf("Error in gamma ratio1_lo. Delete file to regenerate from template.\n"); exit(0);}
-		size_t pos_ratio1_upg= conffile.find("Upper t1/t2 gamma ratio (100*ln(rat)):");
-			if (pos_ratio1_upg != string::npos){
-				pos_ratio1_upg+=38;
-				sscanf(conffile.substr(pos_ratio1_upg).c_str(), "%d", &ratio1_up[1]);
-				if(ratio1_up[1]<=ratio1_lo[1]) {printf("Error: gamma ratio1_up<=ratio1_lo.\n"); exit(0);}
-				if(pf)printf("gamma ratio1_up (100*ln(rat)) =%d\n",ratio1_up[1]);
-			}else {printf("Error in gamma ratio1_up. Delete file to regenerate from template.\n"); exit(0);}
 		size_t pos_step_alpha = conffile.find("Time resolved alpha amplitude step:");
 			if (pos_step_alpha != string::npos){
 				pos_step_alpha+=35;
@@ -291,6 +225,7 @@ int main(int argc,char *argv[]){
 		ENmax_alpha=-(-8192-alpha_thresh)+1;	//num of elements in the array
 	}
 	unsigned alpha_binN = ENmax_alpha/step_alpha+1;
+	if(pf)printf("\nalpha_binN=%u\n",alpha_binN);
 	int ENmax_gamma;
 	if (!gamma_edge){
 		ENmax_gamma=8191-gamma_thresh+1;	//num of elements in the array
@@ -298,11 +233,12 @@ int main(int argc,char *argv[]){
 		ENmax_gamma=-(-8192-gamma_thresh)+1;	//num of elements in the array
 	}
 	unsigned gamma_binN = ENmax_gamma/step_gamma+1;
+	if(pf)printf("gamma_binN=%u\n\n",gamma_binN);
 	
 	long unsigned memreq;
-	memreq=ENmax_alpha+ENmax_gamma+4*2000+alpha_binN*gamma_binN*interval_uint;
+	memreq=ENmax_alpha+ENmax_gamma+alpha_binN*gamma_binN*interval_uint;
 	memreq*=sizeof(unsigned);
-	printf("Total memory required (both in RAM and SD): %lu MB. MAKE SURE IT IS AVAILABLE BEFORE PROCEEDING.\n",memreq/1024/1024);
+	printf("Total memory required (both in RAM and SD): %.4lf MB. MAKE SURE IT IS AVAILABLE BEFORE PROCEEDING.\n",(double)memreq/1024/1024);
 	if(pf){	printf("Press any key to continue...\n");
 		scanf("%*c");
 	}
@@ -339,57 +275,20 @@ int main(int argc,char *argv[]){
 	}
 	else for (int i=0;i!=ENmax_gamma;i++)gamma_array[i]=0;	// else fill with 0
 	
-		//####generate alpha ratio0 array
-	ifile = fopen("measurements/alpha_ratio0.dat","rb");
-	unsigned *alpha_ratio0_array = new unsigned[2001];
-	if (ifile!=NULL) {
-		fread (alpha_ratio0_array,sizeof(unsigned),2001,ifile);	// read existing file
-		fclose(ifile);
-	}
-	else for (int i=0;i!=2001;i++)alpha_ratio0_array[i]=0;	// else fill with 0
-	
-		//####generate alpha rratio1 array
-	ifile = fopen("measurements/alpha_ratio1.dat","rb");
-	unsigned *alpha_ratio1_array = new unsigned[2001];
-	if (ifile!=NULL) {
-		fread (alpha_ratio1_array,sizeof(unsigned),2001,ifile);	// read existing file
-		fclose(ifile);
-	}
-	else for (int i=0;i!=2001;i++)alpha_ratio1_array[i]=0;	// else fill with 0
-		
-		//####generate gamma ratio0 array
-	ifile = fopen("measurements/gamma_ratio0.dat","rb");
-	unsigned *gamma_ratio0_array = new unsigned[2001];
-	if (ifile!=NULL) {
-		fread (gamma_ratio0_array,sizeof(unsigned),2001,ifile);	// read existing file
-		fclose(ifile);
-	}
-	else for (int i=0;i!=2001;i++)gamma_ratio0_array[i]=0;	// else fill with 0
-	
-		//####generate gamma rratio1 array
-	ifile = fopen("measurements/gamma_ratio1.dat","rb");
-	unsigned *gamma_ratio1_array = new unsigned[2001];
-	if (ifile!=NULL) {
-		fread (gamma_ratio1_array,sizeof(unsigned),2001,ifile);	// read existing file
-		fclose(ifile);
-	}
-	else for (int i=0;i!=2001;i++)gamma_ratio1_array[i]=0;	// else fill with 0
-	
 		//####generate time arrays
 	unsigned*** bins = new unsigned**[alpha_binN];
 	for (int i=0; i!=alpha_binN;i++) bins[i] = new unsigned*[gamma_binN];
 	
-	for (int i=0; i!=alpha_binN;i++) for (int j=0; j!=gamma_binN;j++){
-		bins[i][j] = new unsigned[interval_uint];
-		string fname = "measurements/a"+to_string(i)+"g"+to_string(j)+".dat";
-		ifile = fopen(fname.c_str(),"rb");
-		if (ifile!=NULL) {
-			fread (bins[i][j],sizeof(unsigned),interval_uint,ifile);	// read existing file
-			fclose(ifile);
+	ifile = fopen("measurements/time.dat","rb");
+	for (int i=0; i!=alpha_binN;i++) {
+		for (int j=0; j!=gamma_binN;j++){
+			bins[i][j] = new unsigned[interval_uint];
+			if (ifile!=NULL) fread (bins[i][j],sizeof(unsigned),interval_uint,ifile);	// read existing file
+			else for (int k=0;k!=interval_uint;k++)bins[i][j][k]=0;
 		}
-		else for (int k=0;k!=interval_uint;k++)bins[i][j][k]=0;	// else fill with 0
 	}
-	
+	fclose(ifile);
+
 	long long unsigned N_alpha=0;
         long long unsigned N_gamma=0;		//on PC long long int is 8byte, long int is 8byte, int is 4byte
         long long unsigned counter=0;		//on ARM long long int is 8byte, long int is 4byte, int is 4byte	//TODO maybe use uint32_t 
@@ -400,74 +299,40 @@ int main(int argc,char *argv[]){
 	int amplitude;
 	unsigned int cntr_t0;
 	unsigned int cntr_t1;
-	unsigned int cntr_t2;
-	int ratio[2];
-	bool isgood;
 	
 	AGC_reset_fifo(); 
 	for(int i=0;;i++){
-		if (!AGC_get_sample(&isalpha,&amplitude,&cntr_t0,&cntr_t1,&cntr_t2)){
+		if (!AGC_get_sample(&isalpha,&amplitude,&cntr_t0,&cntr_t1)){
 			if (isalpha){
 				N_alpha++;
-				ratio[0]=100*log((double)cntr_t1/(abs(amplitude-alpha_thresh)+1));
-				if (ratio[0]< -1000) ratio[0]=-1000;
-				else if (ratio[0]>1000) ratio[0]=1000;
-				ratio[1]=100*log((double)cntr_t1/(cntr_t0+1));
-				if (ratio[0]< -1000) ratio[0]=-1000;
-				else if (ratio[0]>1000) ratio[0]=1000;
-				
-				alpha_ratio0_array[1000+ratio[0]]++;
-				alpha_ratio1_array[1000+ratio[1]]++;
-				
-				if (ratio[0]>=ratio0_lo[0] && ratio[0]<=ratio0_up[0] && ratio[1]>=ratio1_lo[0] && ratio[1]<=ratio1_up[0]){
-					alpha_array[abs(amplitude-alpha_thresh)]++;
-					isgood=true;
-				}
-				else isgood=false;
-					
+				alpha_array[abs(amplitude-alpha_thresh)]++;	
 			}
 			else{
 				N_gamma++;
-				ratio[0]=100*log(cntr_t1/(abs(amplitude-alpha_thresh)+1));
-				if (ratio[0]< -1000) ratio[0]=-1000;
-				else if (ratio[0]>1000) ratio[0]=1000;
-				ratio[1]=100*log(cntr_t1/(cntr_t0+1));
-				if (ratio[0]< -1000) ratio[0]=-1000;
-				else if (ratio[0]>1000) ratio[0]=1000;
-				
-				gamma_ratio0_array[1000+ratio[0]]++;
-				gamma_ratio1_array[1000+ratio[1]]++;
-				
-				if (ratio[0]>=ratio0_lo[1] && ratio[0]<=ratio0_up[1] && ratio[1]>=ratio1_lo[1] && ratio[1]<=ratio1_up[1]){
-					gamma_array[abs(amplitude-gamma_thresh)]++;
-					isgood=true;
-				}
-				else isgood=false;
+				gamma_array[abs(amplitude-gamma_thresh)]++;
 			}
 			
-			if (isgood){
-				event_ts=counter+cntr_t0-cntr_t1;
-				if (triggerisalpha == isalpha){
-					active_trig.emplace_back();
-					active_trig.back().time=event_ts;
-					active_trig.back().amp=amplitude;
-					active_trig.back().ratio[0]=ratio[0];
-					active_trig.back().ratio[1]=ratio[1];
-				}else{	//the other is trigger
-					for (int j=0;j!=active_trig.size();j++){
-						if (event_ts>active_trig[j].time+interval_uint){
-							active_trig.pop_front();
-							j--;
-						}else{
-							unsigned a,b;
-							if (active_trig[j].time<=event_ts) {
-								a=abs(amplitude-alpha_thresh)/step_alpha;
-								b=abs(amplitude-gamma_thresh)/step_gamma;
-								bins[a][b][event_ts-active_trig[j].time]++;
-							}
+			event_ts=counter+cntr_t0-cntr_t1;
+			if (triggerisalpha == isalpha){
+				active_trig.emplace_back();
+				active_trig.back().time=event_ts;
+				active_trig.back().amp=amplitude;
+			}else{	//the other is trigger
+				for (int j=0;j!=active_trig.size();j++){
+					if (event_ts>active_trig[j].time+interval_uint){
+						active_trig.pop_front();
+						j--;
+					}else{
+						unsigned a,b;
+						if (active_trig[j].time<=event_ts) {
+							if (triggerisalpha) a=abs(active_trig[j].amp-alpha_thresh)/step_alpha;
+							else a=abs(amplitude-alpha_thresh)/step_alpha;
+							if (triggerisalpha) b=abs(amplitude-gamma_thresh)/step_gamma;
+							else b=abs(active_trig[j].amp-gamma_thresh)/step_gamma;
+							bins[a][b][event_ts-active_trig[j].time]++;
 						}
-					}	
-				}
+					}
+				}	
 			}
 			counter+=cntr_t0;
 		}
@@ -478,7 +343,8 @@ int main(int argc,char *argv[]){
 			if (endack) break;
 			endack_mx.unlock();
 			//TODO put in separate thread to speed up
-			if(pf)printf ("\033[2JPress 'e' to stop acquistion.\nN_alpha=%llu\nN_gamma=%llu\nelapsed time=%llu s\nRPTY lost peaks:%u(max in queue %u/150)\n",N_alpha,N_gamma,counter/125000000,AGC_get_num_lost(),AGC_get_max_in_queue());
+			if(pf)printf ("\033[2JPress 'e' to stop acquistion.\nN_alpha=%llu\nN_gamma=%llu\nelapsed time=%llu s\n"
+			              "RPTY lost peaks:%u(max in queue %u/250)\n",N_alpha,N_gamma,counter/125000000,AGC_get_num_lost(),AGC_get_max_in_queue());
 			i=0;
 		}
 		
@@ -491,7 +357,8 @@ int main(int argc,char *argv[]){
 	}
 	else vtime=atof(argv[1]);
 	
-	if(pf)printf ("\033[2JAcquistion ended.\nN_alpha=%llu\nN_gamma=%llu\nelapsed time=%llu s\nRPTY lost peaks:%u(max in queue %u/150)\n",N_alpha,N_gamma,counter/125000000,AGC_get_num_lost(),AGC_get_max_in_queue());
+	if(pf)printf ("\033[2JAcquistion ended.\nN_alpha=%llu\nN_gamma=%llu\nelapsed time=%llu s\n"
+	              "RPTY lost peaks:%u(max in queue %u/250)\n",N_alpha,N_gamma,counter/125000000,AGC_get_num_lost(),AGC_get_max_in_queue());
 	
 	FILE* ofile;
 	
@@ -499,57 +366,29 @@ int main(int argc,char *argv[]){
 	ofile=fopen("measurements/alpha.dat","wb");
 	fwrite (alpha_array,sizeof(unsigned),ENmax_alpha,ofile);
 	fclose(ofile);
-	if(pf)printf("done! format is \'%%uint32\' starting from zero. One line is one channel.\n");
-//	delete[] alpha_array;
+	if(pf)printf("done! format is \'%%uint32\' starting from threshold(=0). One line is one channel.\n");
+	delete[] alpha_array;
 
 	if(pf)printf("Saving gamma...");
 	ofile=fopen("measurements/gamma.dat","wb");
 	fwrite (gamma_array,sizeof(unsigned),ENmax_gamma,ofile);
 	fclose(ofile);
-	if(pf)printf("done! format is \'%%uint32\' starting from zero. One line is one channel.\n");
-//	delete[] gamma_array;
+	if(pf)printf("done! format is \'%%uint32\' starting from threshold(=0). One line is one channel.\n");
+	delete[] gamma_array;
 
-	if(pf)printf("Saving alpha_ratio0...");
-	ofile=fopen("measurements/alpha_ratio0.dat","wb");
-	fwrite (alpha_ratio0_array,sizeof(unsigned),2001,ofile);
-	fclose(ofile);
-	if(pf)printf("done! format is \'%%uint32\' starting from -1000. One line is one ratio, up to 1000.\n");
-//	delete[] alpha_ratio0_array;
-	
-	if(pf)printf("Saving alpha_ratio1...");
-	ofile=fopen("measurements/alpha_ratio1.dat","wb");
-	fwrite (alpha_ratio1_array,sizeof(unsigned),2001,ofile);
-	fclose(ofile);
-	if(pf)printf("done! format is \'%%uint32\' starting from -1000. One line is one ratio, up to 1000.\n");
-//	delete[] alpha_ratio1_array;
-	
-	if(pf)printf("Saving gamma_ratio0...");
-	ofile=fopen("measurements/gamma_ratio0.dat","wb");
-	fwrite (gamma_ratio0_array,sizeof(unsigned),2001,ofile);
-	fclose(ofile);
-	if(pf)printf("done! format is \'%%uint32\' starting from -1000. One line is one ratio, up to 1000.\n");
-//	delete[] gamma_ratio0_array;
-	
-	if(pf)printf("Saving gamma_ratio1...");
-	ofile=fopen("measurements/gamma_ratio1.dat","wb");
-	fwrite (gamma_ratio1_array,sizeof(unsigned),2001,ofile);
-	fclose(ofile);
-	if(pf)printf("done! format is \'%%uint32\' starting from -1000. One line is one ratio, up to 1000.\n");
-//	delete[] gamma_ratio1_array;
 	
 	if(pf)printf("Saving time...");
+	ofile = fopen("measurements/time.dat","wb");
 	for (int i=0; i!=alpha_binN;i++) {
 		for (int j=0; j!=gamma_binN;j++){
-			string fname = "measurements/a"+to_string(i)+"g"+to_string(j)+".dat";
-			ofile = fopen(fname.c_str(),"wb");
 			fwrite (bins[i][j],sizeof(unsigned),interval_uint,ofile);
-			fclose(ofile);
-//			delete[] bins[i][j];
+			delete[] bins[i][j];
 		}
-//		delete[] bins[i];
+		delete[] bins[i];
 	}
-//	delete[] bins;
-	if(pf)printf("done! format is '%uint32' starting from 0. One line is 8ns.\n");
+	delete[] bins;
+	fclose(ofile);
+	if(pf)printf("done! format is \'%%uint32\' and is a 3D matrix of size %d:%d:%d.\n",alpha_binN,gamma_binN,interval_uint);
 	
 	if(pf)printf("Saving duration...");
 	ofile=fopen("measurements/duration.txt","a");
