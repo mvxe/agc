@@ -125,11 +125,11 @@ int AGC_setup(int cntr_thresh_alpha, int cntr_thresh_gamma, bool cntr_edge_alpha
 	else if (cntr_thresh_alpha<-8192) cntr_thresh_alpha=-8192;		//if threshold is negative the peak is assumed to be inverted
 	if (cntr_thresh_gamma>8191) cntr_thresh_gamma=8191;
 	else if (cntr_thresh_gamma<-8192) cntr_thresh_gamma=-8192;
-	AGC->cntr_thresh_alpha = (cntr_thresh_alpha&0x3FFF)+cntr_edge_alpha?0x4000:0;
-	AGC->cntr_thresh_gamma = (cntr_thresh_gamma&0x3FFF)+cntr_edge_gamma?0x4000:0;
+	AGC->cntr_thresh_alpha = (cntr_thresh_alpha&0x3FFF)|(cntr_edge_alpha?0x4000:0);
+	AGC->cntr_thresh_gamma = (cntr_thresh_gamma&0x3FFF)|(cntr_edge_gamma?0x4000:0);
 	AGC->cntr_mintime_alpha = cntr_mintime_alpha;				//time is: cntr_mintime_alpha * 8 ns  (16bit unsigned)
 	AGC->cntr_mintime_gamma = cntr_mintime_gamma;
-	AGC->delay_len = (delay_len&0x1FF)+delay_ch?0x200:0;			//  0<=delay_len<=511
+	AGC->delay_len = (delay_len&0x1FF)|(delay_ch?0x200:0);			//  0<=delay_len<=511
 	return 0;
 }
 
