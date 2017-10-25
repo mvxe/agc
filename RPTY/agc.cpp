@@ -27,7 +27,6 @@
 #include <thread>
 #include <mutex>
 #include <array>
-#include <time.h>
 #include "fpga.cpp"
 
 using namespace std;
@@ -58,13 +57,15 @@ void _gen_conf(void)
 	fprintf(conffile,
 		"Thresholds are minimum intensities required for trigger.\n"
 		"alpha_thresh(-8192 - 8191):\t100\n"
+		"alpha zero level (not needed by program, for reference):\t0\n"
 		"alpha_edge(Rising (R) or Falling (F)):\tR\n"
 		"gamma_thresh(-8192 - 8191):\t100\n"
+		"gamma zero level (not needed by program, for reference):\t0\n"
 		"gamma_edge(Rising (R) or Falling (F)):\tR\n"
 		"Mintime is the minimum duration from threshold rising(falling) pass to falling(rising) pass for the peak to be registered. (in seconds)\n"
 		"alpha_mintime(0 - 0.00052428):\t0.00001\n"
 		"gamma_mintime(0 - 0.00052428):\t0.00001\n"
-		"Add a time delay to the specified channel. (1==1e-8 s)\n"
+		"Add a time delay to the specified channel. (1==8e-9 s)\n"
 		"delay_len(0 - 511):\t0\n"
 		"delay_ch(A or B):\tA\n"
 		"Observed interval after trigger event(0 - 34.3597)(in seconds):\t0.00001\n"
@@ -194,7 +195,7 @@ void term_fun(void){
 	}
 }
 void end_fun(double time){
-	string command="sleep "+to_string(time);
+	string command="sleep "+to_string(time);	//TODO move to main thread (instead of sleep use counter)
 	system (command.c_str());
 	endack_mx.lock();
 	endack=true;
@@ -246,11 +247,9 @@ int main(int argc,char *argv[]){
 	if (AGC_init()) return -1;		//fpga init
 	AGC_setup(alpha_thresh,gamma_thresh,alpha_edge,gamma_edge,alpha_mintime_uint,gamma_mintime_uint,delay_len,delay_ch);
 	
-	time_t Tstart,Tend;
 	if(pf){
 		thread term_thread (term_fun);			//ending by button
-		term_thread.detach();
-		time(&Tstart);
+		term_thread.detach();			
 	}else{
 		thread end_thread (end_fun,atof(argv[1]));	//ending by timer
         	end_thread.detach();
@@ -276,18 +275,18 @@ int main(int argc,char *argv[]){
 	else for (int i=0;i!=ENmax_gamma;i++)gamma_array[i]=0;	// else fill with 0
 	
 		//####generate time arrays
-	unsigned*** bins = new unsigned**[alpha_binN];
-	for (int i=0; i!=alpha_binN;i++) bins[i] = new unsigned*[gamma_binN];
 	
 	ifile = fopen("measurements/time.dat","rb");
+	unsigned*** bins = new unsigned**[alpha_binN];
 	for (int i=0; i!=alpha_binN;i++) {
+		bins[i] = new unsigned*[gamma_binN];
 		for (int j=0; j!=gamma_binN;j++){
 			bins[i][j] = new unsigned[interval_uint];
 			if (ifile!=NULL) fread (bins[i][j],sizeof(unsigned),interval_uint,ifile);	// read existing file
 			else for (int k=0;k!=interval_uint;k++)bins[i][j][k]=0;
 		}
 	}
-	fclose(ifile);
+	if (ifile!=NULL) fclose(ifile);	
 
 	long long unsigned N_alpha=0;
         long long unsigned N_gamma=0;		//on PC long long int is 8byte, long int is 8byte, int is 4byte
@@ -350,13 +349,6 @@ int main(int argc,char *argv[]){
 		
 	}
 	
-	double vtime;
-	if (pf) {
-		time(&Tend);
-		vtime = difftime(Tend,Tstart);
-	}
-	else vtime=atof(argv[1]);
-	
 	if(pf)printf ("\033[2JAcquistion ended.\nN_alpha=%llu\nN_gamma=%llu\nelapsed time=%llu s\n"
 	              "RPTY lost peaks:%u(max in queue %u/250)\n",N_alpha,N_gamma,counter/125000000,AGC_get_num_lost(),AGC_get_max_in_queue());
 	
@@ -392,7 +384,7 @@ int main(int argc,char *argv[]){
 	
 	if(pf)printf("Saving duration...");
 	ofile=fopen("measurements/duration.txt","a");
-	fprintf(ofile,"+%.2lf seconds\n",vtime);
+	fprintf(ofile,"+%llu seconds\n",counter/125000000);
 	fclose(ofile);
 	
 	AGC_exit();
