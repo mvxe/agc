@@ -194,21 +194,13 @@ void term_fun(void){
 		}
 	}
 }
-void end_fun(double time){
-	string command="sleep "+to_string(time);	//TODO move to main thread (instead of sleep use counter)
-	system (command.c_str());
-	endack_mx.lock();
-	endack=true;
-	endack_mx.unlock();
-	return;
-}
 
 int main(int argc,char *argv[]){
-	if (argc>2){printf ("The program takes either no arguments or a single time acqusition parameter for background acquisition.\n");return 0;}
+	if (argc>2){printf ("The program takes either no arguments or a single time acqusition parameter (integer - time in seconds) for background acquisition.\n");return 0;}
 	bool pf=true;
 	if (argc==2) pf=false;
 	
-	if(pf)printf ("You may also start this program in background with a fixed acquisition duration by starting it with an time argument. (like \"./agc.out 3600 &\")\n");
+	if(pf)printf ("You may also start this program in background with a fixed acquisition duration by starting it with an time argument (integer - time in seconds). (like \"./agc.out 3600 &\")\n");
 	if(pf)printf ("Note that existing .dat files are read and new counts are added to existing ones. If the settings change (such as energy boundaries) these files should be removed"
 	              ", else the program may crash (because wrong file lenghts etc.).\n\n");
 	_load_conf(pf);
@@ -250,10 +242,9 @@ int main(int argc,char *argv[]){
 	if(pf){
 		thread term_thread (term_fun);			//ending by button
 		term_thread.detach();			
-	}else{
-		thread end_thread (end_fun,atof(argv[1]));	//ending by timer
-        	end_thread.detach();
 	}
+       
+	//TODO move agc_conf into measurements folder, if it already exists check if they are identical, if not break
        
         FILE* ifile;
 		//####generate alpha energy array
@@ -338,10 +329,13 @@ int main(int argc,char *argv[]){
 	
 
 		if (i/1000000){
-			endack_mx.lock();
-			if (endack) break;
-			endack_mx.unlock();
-			//TODO put in separate thread to speed up
+			if(pf){
+				endack_mx.lock();
+				if (endack) break;
+				endack_mx.unlock();
+			}
+			else if (counter/125000000>=atoi(argv[1])) break;
+			
 			if(pf)printf ("\033[2JPress 'e' to stop acquistion.\nN_alpha=%llu\nN_gamma=%llu\nelapsed time=%llu s\n"
 			              "RPTY lost peaks:%u(max in queue %u/250)\n",N_alpha,N_gamma,counter/125000000,AGC_get_num_lost(),AGC_get_max_in_queue());
 			i=0;
