@@ -16,17 +16,15 @@
     along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-//compilation: g++ -pthread -std=c++11 agc.cpp -o agc
+#define VERSION "1.0"
 
 #include <cstdio>
 #include <cstdlib>
 #include <string>
 #include <fstream>
-#include <vector>
 #include <deque>
 #include <thread>
 #include <mutex>
-#include <array>
 #include "fpga.cpp"
 
 using namespace std;
@@ -196,10 +194,10 @@ void term_fun(void){
 }
 
 int main(int argc,char *argv[]){
-	if (argc>2){printf ("The program takes either no arguments or a single time acqusition parameter (integer - time in seconds) for background acquisition.\n");return 0;}
 	bool pf=true;
 	if (argc==2) pf=false;
-	
+	if(pf) printf("Alpha-gamma counter program, version: %s\n",VERSION);
+	if (argc>2){printf ("The program takes either no arguments or a single time acqusition parameter (integer - time in seconds) for background acquisition.\n");return 0;}
 	if(pf)printf ("You may also start this program in background with a fixed acquisition duration by starting it with an time argument (integer - time in seconds). (like \"./agc.out 3600 &\")\n");
 	if(pf)printf ("Note that existing .dat files are read and new counts are added to existing ones. If the settings change (such as energy boundaries) these files should be removed"
 	              ", else the program may crash (because wrong file lenghts etc.).\n\n");
@@ -209,7 +207,7 @@ int main(int argc,char *argv[]){
 	interval_uint=(unsigned)(interval*125000000);
 
 	system ("mkdir measurements -p");
-	system ("cat red_pitaya.bin > /dev/xdevcfg");
+	system ("cat red_pitaya_agcv_1.0.bin > /dev/xdevcfg");
 	
 	int ENmax_alpha;
 	if (!alpha_edge){	//rising edge
