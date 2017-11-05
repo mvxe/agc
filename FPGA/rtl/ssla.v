@@ -336,7 +336,7 @@ end else begin
 					  end
 		20'h0028		: begin 
 						sys_ack <= sys_en;	
-						sys_rdata <= {{32-16{1'b0}},cntr_t1_buf[`FIFO_size-1];} 	//ALWAYS read this buffer last as it will delete the FIFO element
+						sys_rdata <= {{32-16{1'b0}},cntr_t1_buf[`FIFO_size-1]}; 	//ALWAYS read this buffer last as it will delete the FIFO element
 						if (sys_ren && (cntr_isd_buf[`FIFO_size-1]==1'd1)) mes_received <= ~mes_received; 	//last element has been read
 						
 					  end

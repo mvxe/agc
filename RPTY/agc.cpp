@@ -178,6 +178,19 @@ void _load_conf(bool pf)
 	t.close();
 }
 
+bool _match_confs()	//compare configs
+{
+	ifstream t0("agc_conf.txt");
+	string conffile0((istreambuf_iterator<char>(t0)), istreambuf_iterator<char>());
+	ifstream t1("measurements/agc_conf.txt");
+	string conffile2((istreambuf_iterator<char>(t1)), istreambuf_iterator<char>());
+	if (conffile2.empty()){
+		system ("cp agc_conf.txt measurements/agc_conf.txt");
+	}
+	else if (conffile0.compare(conffile2) != 0) return true;
+	return false;
+}
+
 mutex endack_mx;
 bool endack=false;
 void term_fun(void){
@@ -206,8 +219,22 @@ int main(int argc,char *argv[]){
 	gamma_mintime_uint=(unsigned)(gamma_mintime*125000000);
 	interval_uint=(unsigned)(interval*125000000);
 
+	//check if red_pitaya_agcv_VERSION.bin exists
+	FILE* binFILE;
+	string fnamecomm="red_pitaya_agc_v";
+	fnamecomm += VERSION;
+	fnamecomm += ".bit";
+	binFILE = fopen(fnamecomm.c_str(),"rb");
+	if (binFILE!=NULL) fclose(binFILE);
+	else {printf ("FILE %s NOT FOUND. ABORTING.\n",fnamecomm.c_str());return 0;}
+	fnamecomm.insert(0,"cat ");
+	fnamecomm+= " > /dev/xdevcfg";
+	system (fnamecomm.c_str());
+	
+	//make measurements folder if missing, and check if existing configuration inside it matches the config in the working directory
 	system ("mkdir measurements -p");
-	system ("cat red_pitaya_agcv_1.0.bin > /dev/xdevcfg");
+	if (_match_confs()) {printf ("Configuration in working directory does not match the one in measurements folder. "
+			"You should rename the measurements folder to prevent appending new data with different configuration. Aborting.\n",fnamecomm.c_str());return 0;}
 	
 	int ENmax_alpha;
 	if (!alpha_edge){	//rising edge
@@ -242,7 +269,6 @@ int main(int argc,char *argv[]){
 		term_thread.detach();			
 	}
        
-	//TODO move agc_conf into measurements folder, if it already exists check if they are identical, if not break
        
         FILE* ifile;
 		//####generate alpha energy array
