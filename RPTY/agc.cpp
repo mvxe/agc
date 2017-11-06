@@ -234,7 +234,7 @@ int main(int argc,char *argv[]){
 	gamma_mintime_uint=(unsigned)(gamma_mintime*125000000);
 	interval_uint=(unsigned)(interval*125000000);
 
-	//check if red_pitaya_agcv_VERSION.bin exists
+	//check if red_pitaya_agcv_VERSION.bit exists
 	FILE* binFILE;
 	string fnamecomm="red_pitaya_agc_v";
 	fnamecomm += VERSION;

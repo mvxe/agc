@@ -159,7 +159,7 @@ inline int AGC_get_sample(bool *isalpha, int *amplitude, unsigned *cntr_t0, unsi
 
 int AGC_set_overlap(unsigned alpha, unsigned gamma)	// 0<=alpha,gamma<=7
 {
-	AGC->peak_cntr_param=(alpha&0x7)|(gamma&0x38);
+	AGC->peak_cntr_param=(alpha&0x7)|((gamma<<3)&0x38);
 	return 0;
 }
 
