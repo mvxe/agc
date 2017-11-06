@@ -106,6 +106,25 @@ reg tmpreg;
 reg          mes_received;				//this gets flipped if the last element in the FIFO has been read
 reg          mes_received_loc;				//a local copy of mes_received which we check to see if flipped
 
+reg [ 2: 0] peak_cntr_alpha_param;			//for overlapping peak counting
+reg [ 2: 0] peak_cntr_gamma_param;
+reg [ 31: 0] alpha_npeaks2;
+reg [ 15: 0] alpha_npeaks3;
+reg [ 15: 0] alpha_npeaks4p;
+reg [ 31: 0] gamma_npeaks2;
+reg [ 15: 0] gamma_npeaks3;
+reg [ 15: 0] gamma_npeaks4p;
+reg [ 7: 0] peak_cntr_alpha;		
+reg signed [ 13+7: 0] peak_avg_alpha;
+reg signed [ 13+7: 0] ppeak_avg_alpha;
+reg signed [ 13+7: 0] pppeak_avg_alpha;
+reg [ 7: 0] nopeaks_alpha;
+reg [ 7: 0] peak_cntr_gamma;
+reg signed [ 13+7: 0] peak_avg_gamma;
+reg signed [ 13+7: 0] ppeak_avg_gamma;
+reg signed [ 13+7: 0] pppeak_avg_gamma;
+reg [ 7: 0] nopeaks_gamma;
+
 always @(posedge clk_i) begin	
 	if ((rstn_i == 1'b0) || (reset_fifo != reset_fifo_loc)) begin
 		if(reset_fifo != reset_fifo_loc) begin
@@ -143,6 +162,13 @@ always @(posedge clk_i) begin
 		cntr_gamma_saveflag <= 1'd0;
 		
 		tmpreg <= 1'd0;
+		
+		alpha_npeaks2 <= 32'd0;
+		alpha_npeaks3 <= 16'd0;
+		alpha_npeaks4p <= 16'd0;
+		gamma_npeaks2 <= 32'd0;
+		gamma_npeaks3 <= 16'd0;
+		gamma_npeaks4p <= 16'd0;
 	end
 	else begin
 		for (j=0; j<511; j=j+1)
@@ -209,16 +235,42 @@ always @(posedge clk_i) begin
 					cntr_max_alpha <= din_a;
 				if (cntr_t1_alpha!=16'd65535)
 					cntr_t1_alpha <= cntr_t1_alpha + 16'd1;
+					
+				if (peak_cntr_alpha>=((8'd1<<peak_cntr_alpha_param)-8'd1) ) begin	//overlapping peak detection: we avg to get rid of noise/false peaks, then count edge change
+					peak_avg_alpha <= din_a;
+					ppeak_avg_alpha <= peak_avg_alpha;
+					pppeak_avg_alpha <= ppeak_avg_alpha;
+					peak_cntr_alpha <= 8'd0;
+					if ( ((!cntr_sign_alpha) && (ppeak_avg_alpha >= peak_avg_alpha) && (ppeak_avg_alpha > pppeak_avg_alpha)) 
+					   || ((cntr_sign_alpha) && (ppeak_avg_alpha <= peak_avg_alpha) && (ppeak_avg_alpha < pppeak_avg_alpha)) ) begin
+						nopeaks_alpha <= nopeaks_alpha + 8'd1;
+					end
+				end
+				else begin
+					peak_avg_alpha <= peak_avg_alpha + din_a;
+					peak_cntr_alpha <= peak_cntr_alpha + 8'd1;
+				end
 			end
 			else begin						//if its not ongoing we start it
 				cntr_alpha_ongoing <= 1'd1;
 				cntr_t1_alpha <= 16'd0;
 				cntr_max_alpha <= din_a;
+				
+				nopeaks_alpha <= 8'd0;	//for overlapping peak detection
+				peak_cntr_alpha <= ((8'd1<<peak_cntr_alpha_param)-8'd1);
+				peak_avg_alpha <= din_a<<peak_cntr_alpha_param;
+				ppeak_avg_alpha <= din_a<<peak_cntr_alpha_param;
+				pppeak_avg_alpha <= din_a<<peak_cntr_alpha_param;
 			end
 		end
 		else if (cntr_alpha_ongoing == 1'd1) begin			//if it is ongoing but we went below threshold
 			cntr_alpha_ongoing <= 1'd0;
-			if (cntr_t1_alpha>=cntr_mintime_alpha) cntr_alpha_saveflag <= 1'b1;	//we save only if the peak is wide enough (else it might be noise or something else)
+			if (cntr_t1_alpha>=cntr_mintime_alpha) begin	//we save only if the peak is wide enough (else it might be noise or something else)
+				if (nopeaks_alpha == 8'd1) cntr_alpha_saveflag <= 1'b1;  	//and has no overlapps
+				else if (nopeaks_alpha == 8'd2) alpha_npeaks2 <= alpha_npeaks2 + 32'd1;	//statistics on overlapping peaks
+				else if (nopeaks_alpha == 8'd3) alpha_npeaks3 <= alpha_npeaks3 + 16'd1;
+				else alpha_npeaks4p <= alpha_npeaks4p + 16'd1;
+			end
 		end
 		
 		if ( (cntr_gamma_saveflag == 1'd0) && (((!cntr_sign_gamma) && (din_b >= cntr_thresh_gamma)) || ((cntr_sign_gamma) && (din_b <= cntr_thresh_gamma))) ) begin
@@ -227,16 +279,42 @@ always @(posedge clk_i) begin
 					cntr_max_gamma <= din_b;
 				if (cntr_t1_gamma!=16'd65535)
 					cntr_t1_gamma <= cntr_t1_gamma + 16'd1;
+										
+				if (peak_cntr_gamma>=((8'd1<<peak_cntr_gamma_param)-8'd1) ) begin
+					peak_avg_gamma <= din_b;
+					ppeak_avg_gamma <= peak_avg_gamma;
+					pppeak_avg_gamma <= ppeak_avg_gamma;
+					peak_cntr_gamma <= 8'd0;
+					if ( ((!cntr_sign_gamma) && (ppeak_avg_gamma >= peak_avg_gamma) && (ppeak_avg_gamma > pppeak_avg_gamma)) 
+					   || ((cntr_sign_gamma) && (ppeak_avg_gamma <= peak_avg_gamma) && (ppeak_avg_gamma < pppeak_avg_gamma)) ) begin
+						nopeaks_gamma <= nopeaks_gamma + 8'd1;
+					end
+				end
+				else begin
+					peak_avg_gamma <= peak_avg_gamma + din_b;
+					peak_cntr_gamma <= peak_cntr_gamma + 8'd1;
+				end
 			end
 			else begin			
 				cntr_gamma_ongoing <= 1'd1;
 				cntr_t1_gamma <= 16'd0;
 				cntr_max_gamma <= din_b;
+								
+				nopeaks_gamma <= 8'd0;
+				peak_cntr_gamma <= ((8'd1<<peak_cntr_gamma_param)-8'd1);
+				peak_avg_gamma <= din_b<<peak_cntr_gamma_param;
+				ppeak_avg_gamma <= din_b<<peak_cntr_gamma_param;
+				pppeak_avg_gamma <= din_b<<peak_cntr_gamma_param;
 			end
 		end
 		else if (cntr_gamma_ongoing == 1'd1) begin	
 			cntr_gamma_ongoing <= 1'd0;
-			if (cntr_t1_gamma>=cntr_mintime_gamma) cntr_gamma_saveflag <= 1'b1;
+			if (cntr_t1_gamma>=cntr_mintime_gamma) begin
+				if (nopeaks_gamma == 8'd1) cntr_gamma_saveflag <= 1'b1;
+				else if (nopeaks_gamma == 8'd2) gamma_npeaks2 <= gamma_npeaks2 + 32'd1;
+				else if (nopeaks_gamma == 8'd3) gamma_npeaks3 <= gamma_npeaks3 + 16'd1;
+				else gamma_npeaks4p <= gamma_npeaks4p + 16'd1;
+			end
 		end
 		
 		if (max_mes_in_FIFO<mes_in_FIFO) max_mes_in_FIFO <= mes_in_FIFO;	//just to log the largest number of elements in FIFO at any point after reset
@@ -275,7 +353,8 @@ always @(posedge clk_i) begin
 		delay_len <= 9'd0;
 		delay_ch <= 1'd0;
 		reset_fifo <= 1'd0;
-		
+		peak_cntr_alpha_param <= 3'd5;		//by default avg (1<<5)-1 samples for overlapping peak detection
+		peak_cntr_gamma_param <= 3'd5;
 	end
 	else begin
 		if (sys_wen) begin
@@ -298,6 +377,17 @@ always @(posedge clk_i) begin
 							delay_len <= sys_wdata[8:0];
 							delay_ch <= sys_wdata[9];
 						  end	
+				//20'h0020	used
+				//20'h0024	used
+				//20'h0028	used
+				20'h002C	: begin 	
+							peak_cntr_alpha_param <= sys_wdata[2:0];
+				        	  	peak_cntr_gamma_param <= sys_wdata[5:3];
+				        	  end
+				//20'h0030	used
+				//20'h0034	used 
+				//20'h0038	used
+				//20'h003C	used 	  
 			endcase
 
 		end
@@ -340,6 +430,11 @@ end else begin
 						if (sys_ren && (cntr_isd_buf[`FIFO_size-1]==1'd1)) mes_received <= ~mes_received; 	//last element has been read
 						
 					  end
+		20'h002C		: begin sys_ack <= sys_en;	sys_rdata <= {{32-6{1'b0}}, peak_cntr_gamma_param, peak_cntr_alpha_param }; end
+		20'h0030		: begin sys_ack <= sys_en;	sys_rdata <= alpha_npeaks2; end
+		20'h0034		: begin sys_ack <= sys_en;	sys_rdata <= {alpha_npeaks4p, alpha_npeaks3 }; end
+		20'h0038		: begin sys_ack <= sys_en;	sys_rdata <= gamma_npeaks2; end
+		20'h003C		: begin sys_ack <= sys_en;	sys_rdata <= {gamma_npeaks4p, gamma_npeaks3 }; end
 		
 
 		default	:	begin sys_ack <= sys_en;	sys_rdata <=  32'h0;	end

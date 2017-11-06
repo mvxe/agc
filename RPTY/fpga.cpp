@@ -56,6 +56,16 @@ struct _par_str{
 							// 32bit unsigned int	time difference from falling threshold of last peak to rising threshold of current peak			
 	uint32_t mes_cntr_t1;				//address: h28	
 							// 16bit unsigned int	time from rising threshold crossing to falling threshold crossing (peak width)	##READING OF THIS REGISTER CLEARS THIS PEAK FROM FIFO##	
+	uint32_t peak_cntr_param;			//address: h2C	
+							// b5-3 : gamma avging, b2-b0 : alpha avging
+	uint32_t alpha_npeaks2;				//address: h30	
+							// 32bit unsigned int
+	uint32_t alpha_npeaks34p;			//address: h34	
+							// 2x16bit unsigned int	
+	uint32_t gamma_npeaks2;				//address: h38	
+							// 32bit unsigned int
+	uint32_t gamma_npeaks34p;			//address: h3C	
+							// 2x16bit unsigned int												
 };
 
 _par_str *AGC = NULL;	//parameters
@@ -147,3 +157,20 @@ inline int AGC_get_sample(bool *isalpha, int *amplitude, unsigned *cntr_t0, unsi
 	return 0;								//new data was returned
 }
 
+int AGC_set_overlap(unsigned alpha, unsigned gamma)	// 0<=alpha,gamma<=7
+{
+	AGC->peak_cntr_param=(alpha&0x7)|(gamma&0x38);
+	return 0;
+}
+
+inline unsigned AGC_get_overlap(unsigned N)
+{
+	switch (N){
+		case 0 : return AGC->alpha_npeaks2;
+		case 1 : return (AGC->alpha_npeaks34p&0xFFFF);
+		case 2 : return (AGC->alpha_npeaks34p&0xFFFF0000)>>16;
+		case 3 : return AGC->gamma_npeaks2;
+		case 4 : return (AGC->gamma_npeaks34p&0xFFFF);
+		case 5 : return (AGC->gamma_npeaks34p&0xFFFF0000)>>16;
+	}
+}

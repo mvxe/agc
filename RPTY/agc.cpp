@@ -16,7 +16,7 @@
     along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-#define VERSION "1.0"
+#define VERSION "1.1"
 
 #include <cstdio>
 #include <cstdlib>
@@ -46,7 +46,8 @@ bool delay_ch;
 bool triggerisalpha;
 unsigned step_alpha;
 unsigned step_gamma;
-
+unsigned alpha_po_avg;	//peak overlap parameter, 0<=par<=7
+unsigned gamma_po_avg;
 
 void _gen_conf(void)
 {
@@ -63,6 +64,8 @@ void _gen_conf(void)
 		"Mintime is the minimum duration from threshold rising(falling) pass to falling(rising) pass for the peak to be registered. (in seconds)\n"
 		"alpha_mintime(0 - 0.00052428):\t0.00001\n"
 		"gamma_mintime(0 - 0.00052428):\t0.00001\n"
+		"alpha avging for peak overlap detection (0-7):\t5\n"
+		"gamma avging for peak overlap detection (0-7):\t5\n"
 		"Add a time delay to the specified channel. (1==8e-9 s)\n"
 		"delay_len(0 - 511):\t0\n"
 		"delay_ch(A or B):\tA\n"
@@ -167,6 +170,18 @@ void _load_conf(bool pf)
 				sscanf(conffile.substr(pos_step_gamma).c_str(), "%u", &step_gamma);
 				if(pf)printf("step_gamma=%u\n",step_gamma);
 			}else {printf("Error in step_gamma. Delete file to regenerate from template.\n"); exit(0);}	
+		size_t pos_alpha_po_avg = conffile.find("alpha avging for peak overlap detection (0-7):");
+			if (pos_alpha_po_avg != string::npos){
+				pos_alpha_po_avg+=46;
+				sscanf(conffile.substr(pos_alpha_po_avg).c_str(), "%u", &alpha_po_avg);
+				if(pf)printf("alpha_po_avg=%u\n",alpha_po_avg);
+			}else {printf("Error in alpha_po_avg. Delete file to regenerate from template.\n"); exit(0);}
+		size_t pos_gamma_po_avg = conffile.find("gamma avging for peak overlap detection (0-7):");
+			if (pos_gamma_po_avg != string::npos){
+				pos_gamma_po_avg+=46;
+				sscanf(conffile.substr(pos_gamma_po_avg).c_str(), "%u", &gamma_po_avg);
+				if(pf)printf("gamma_po_avg=%u\n",gamma_po_avg);
+			}else {printf("Error in gamma_po_avg. Delete file to regenerate from template.\n"); exit(0);}
 			
 		if(pf)printf("All loaded, no errors (I did not check for boundaries, you better had chosen them properly)!.\n");
 	}
@@ -263,6 +278,7 @@ int main(int argc,char *argv[]){
 	
 	if (AGC_init()) return -1;		//fpga init
 	AGC_setup(alpha_thresh,gamma_thresh,alpha_edge,gamma_edge,alpha_mintime_uint,gamma_mintime_uint,delay_len,delay_ch);
+	AGC_set_overlap(alpha_po_avg, gamma_po_avg);
 	
 	if(pf){
 		thread term_thread (term_fun);			//ending by button
@@ -361,14 +377,26 @@ int main(int argc,char *argv[]){
 			else if (counter/125000000>=atoi(argv[1])) break;
 			
 			if(pf)printf ("\033[2JPress 'e' to stop acquistion.\nN_alpha=%llu\nN_gamma=%llu\nelapsed time=%llu s\n"
-			              "RPTY lost peaks:%u(max in queue %u/250)\n",N_alpha,N_gamma,counter/125000000,AGC_get_num_lost(),AGC_get_max_in_queue());
+			              "RPTY lost peaks:%u(max in queue %u/250)\n"
+			              "alpha_npeaks2=%u\nalpha_npeaks3=%u\nalpha_npeaks4+=%u\n"
+			              "gamma_npeaks2=%u\ngamma_npeaks3=%u\ngamma_npeaks4+=%u\n"
+			              ,N_alpha,N_gamma,counter/125000000,AGC_get_num_lost(),AGC_get_max_in_queue()
+			              ,AGC_get_overlap(0),AGC_get_overlap(1),AGC_get_overlap(2)
+			              ,AGC_get_overlap(3),AGC_get_overlap(4),AGC_get_overlap(5) );
 			i=0;
 		}
 		
 	}
 	
+	unsigned oploss[6];
+	oploss[0]=AGC_get_overlap(0); oploss[1]=AGC_get_overlap(1); oploss[2]=AGC_get_overlap(2); 
+	oploss[3]=AGC_get_overlap(3); oploss[4]=AGC_get_overlap(4); oploss[5]=AGC_get_overlap(5); 
 	if(pf)printf ("\033[2JAcquistion ended.\nN_alpha=%llu\nN_gamma=%llu\nelapsed time=%llu s\n"
-	              "RPTY lost peaks:%u(max in queue %u/250)\n",N_alpha,N_gamma,counter/125000000,AGC_get_num_lost(),AGC_get_max_in_queue());
+	              "RPTY lost peaks:%u(max in queue %u/250)\n"
+	              "alpha_npeaks2=%u\nalpha_npeaks3=%u\nalpha_npeaks4+=%u\n"
+	              "gamma_npeaks2=%u\ngamma_npeaks3=%u\ngamma_npeaks4+=%u\n"
+	              ,N_alpha,N_gamma,counter/125000000,AGC_get_num_lost(),AGC_get_max_in_queue()
+	              ,oploss[0],oploss[1],oploss[2],oploss[3],oploss[4],oploss[5] );
 	
 	FILE* ofile;
 	
@@ -402,7 +430,8 @@ int main(int argc,char *argv[]){
 	
 	if(pf)printf("Saving duration...");
 	ofile=fopen("measurements/duration.txt","a");
-	fprintf(ofile,"+%llu seconds\n",counter/125000000);
+	fprintf(ofile,"+%llu seconds\nN_alpha:%llu\nN_gamma:%llu\noploss:%u/%u/%u/%u/%u/%u\n\n",counter/125000000
+	        ,N_alpha,N_gamma,oploss[0],oploss[1],oploss[2],oploss[3],oploss[4],oploss[5] );
 	fclose(ofile);
 	
 	AGC_exit();
