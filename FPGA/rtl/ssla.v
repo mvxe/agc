@@ -145,18 +145,23 @@ always @(posedge clk_i) begin
 		tmpreg <= 1'd0;
 	end
 	else begin
+		HPFa_in <= in_a;
+		HPFb_in <= in_b;	
+		out_a <= HPFa_out;	//for debugging
+		out_b <= HPFb_out;
+	
 		for (j=0; j<511; j=j+1)
 			delay_fifo[j+1] <= delay_fifo[j] ;
 		if (delay_ch) begin
-			delay_fifo[0] <= in_b;
+			delay_fifo[0] <= HPFb_out;
 			din_b <= delay_fifo[delay_len];
-			ocd <= in_a;
+			ocd <= HPFa_out;
 			din_a <= ocd;
 		end
 		else begin
-			delay_fifo[0] <= in_a;
+			delay_fifo[0] <= HPFa_out;
 			din_a <= delay_fifo[delay_len];
-			ocd <= in_b;
+			ocd <= HPFb_out;
 			din_b <= ocd;
 		end
 				
@@ -259,6 +264,51 @@ always @(posedge clk_i) begin
 	end
 end
 
+////--------------------------------  High pass filter for chA --------------------------------////
+
+reg signed [ 14-1: 0] HPFa_in;
+reg signed [ 14-1: 0] HPFa_out;
+
+reg [ 8-1: 0] HPFa_par;		// 0 - 32 :: alpha=1/2^(HPFa_par)
+
+reg signed [ 48-1: 0] HPFa_val;
+reg signed [ 14-1: 0] HPFa_tmp;
+
+always @(posedge clk_i) begin	
+	if (rstn_i == 1'b0) begin
+		HPFa_val <= 48'sd0;
+		HPFa_tmp <= 14'sd0;
+	end
+	else begin	
+		HPFa_val <= HPFa_val - (HPFa_val>>>HPFa_par) + HPFa_in;
+		HPFa_tmp <= HPFa_in;
+		
+		HPFa_out <= HPFa_tmp - (HPFa_val>>>HPFa_par);
+	end
+end
+
+////--------------------------------  High pass filter for chB --------------------------------////
+
+reg signed [ 14-1: 0] HPFb_in;
+reg signed [ 14-1: 0] HPFb_out;
+
+reg [ 8-1: 0] HPFb_par;		// 0 - 32 :: alpha=1/2^(HPFb_par)
+
+reg signed [ 48-1: 0] HPFb_val;
+reg signed [ 14-1: 0] HPFb_tmp;
+
+always @(posedge clk_i) begin	
+	if (rstn_i == 1'b0) begin
+		HPFb_val <= 48'sd0;
+		HPFb_tmp <= 14'sd0;
+	end
+	else begin	
+		HPFb_val <= HPFb_val - (HPFb_val>>>HPFb_par) + HPFb_in;
+		HPFb_tmp <= HPFb_in;
+		
+		HPFb_out <= HPFb_tmp - (HPFb_val>>>HPFb_par);
+	end
+end
 
 
 ////------------------------------- System bus connection -----------------------------////
@@ -275,6 +325,8 @@ always @(posedge clk_i) begin
 		delay_len <= 9'd0;
 		delay_ch <= 1'd0;
 		reset_fifo <= 1'd0;
+		HPFa_par <= 8'd32;
+		HPFb_par <= 8'd32;
 		
 	end
 	else begin
@@ -297,6 +349,13 @@ always @(posedge clk_i) begin
 				20'h001C	: begin
 							delay_len <= sys_wdata[8:0];
 							delay_ch <= sys_wdata[9];
+						  end
+				//20'h0020	used
+				//20'h0024	used	
+				//20'h0028	used  	
+				20'h002C	: begin
+							HPFa_par <= sys_wdata[7:0];
+							HPFb_par <= sys_wdata[15:8];
 						  end	
 			endcase
 
@@ -340,6 +399,7 @@ end else begin
 						if (sys_ren && (cntr_isd_buf[`FIFO_size-1]==1'd1)) mes_received <= ~mes_received; 	//last element has been read
 						
 					  end
+		20'h002C		: begin sys_ack <= sys_en;	sys_rdata <= {{32-16{1'b0}},HPFb_par,HPFa_par};  end
 		
 
 		default	:	begin sys_ack <= sys_en;	sys_rdata <=  32'h0;	end

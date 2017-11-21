@@ -56,6 +56,8 @@ struct _par_str{
 							// 32bit unsigned int	time difference from falling threshold of last peak to rising threshold of current peak			
 	uint32_t mes_cntr_t1;				//address: h28	
 							// 16bit unsigned int	time from rising threshold crossing to falling threshold crossing (peak width)	##READING OF THIS REGISTER CLEARS THIS PEAK FROM FIFO##	
+	uint32_t HPFab;					//address: h2C
+							// b15-8 : HPF parameter for chB (8 bit unsigned, must be 0<=;<=32) , b7-0 : HPF parameter for chA (8 bit unsigned, must be 0<=;<=32)						
 };
 
 _par_str *AGC = NULL;	//parameters
@@ -119,7 +121,7 @@ inline unsigned AGC_get_max_in_queue()
 	return (AGC->mes_in_queue&0xFFFF0000)>>16;
 }
 
-int AGC_setup(int cntr_thresh_alpha, int cntr_thresh_gamma, bool cntr_edge_alpha, bool cntr_edge_gamma, unsigned cntr_mintime_alpha, unsigned cntr_mintime_gamma, unsigned delay_len, bool delay_ch)	
+int AGC_setup(int cntr_thresh_alpha, int cntr_thresh_gamma, bool cntr_edge_alpha, bool cntr_edge_gamma, unsigned cntr_mintime_alpha, unsigned cntr_mintime_gamma, unsigned delay_len, bool delay_ch, unsigned HPFa, unsigned HPFb)	
 {
 	if (cntr_thresh_alpha>8191) cntr_thresh_alpha=8191;			//threshold from -8192 to 8191
 	else if (cntr_thresh_alpha<-8192) cntr_thresh_alpha=-8192;		//if threshold is negative the peak is assumed to be inverted
@@ -130,6 +132,7 @@ int AGC_setup(int cntr_thresh_alpha, int cntr_thresh_gamma, bool cntr_edge_alpha
 	AGC->cntr_mintime_alpha = cntr_mintime_alpha;				//time is: cntr_mintime_alpha * 8 ns  (16bit unsigned)
 	AGC->cntr_mintime_gamma = cntr_mintime_gamma;
 	AGC->delay_len = (delay_len&0x1FF)|(delay_ch?0x200:0);			//  0<=delay_len<=511
+	AGC->HPFab=(HPFa&0xFF)|((HPFb&0xFF)<<8);				//  0<=HPFa,HPFb<=32
 	return 0;
 }
 
@@ -141,7 +144,7 @@ inline int AGC_get_sample(bool *isalpha, int *amplitude, unsigned *cntr_t0, unsi
 	if (temp&0x40000000) *isalpha=false;
 	else *isalpha=true;
 	*amplitude = (temp&0x3FFF0000)>>16;
-	if (*amplitude&0x2000) {*amplitude^=0x2000; *amplitude^=0xFFFFE000;}
+	if (*amplitude&0x2000) *amplitude^=0xFFFFC000;
 	*cntr_t0=AGC->mes_cntr_t0;
 	*cntr_t1=AGC->mes_cntr_t1&0xFFFF;
 	return 0;								//new data was returned

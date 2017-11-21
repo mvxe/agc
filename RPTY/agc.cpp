@@ -16,7 +16,7 @@
     along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-#define VERSION "1.0"
+#define VERSION "1.3"
 
 #include <cstdio>
 #include <cstdlib>
@@ -46,6 +46,8 @@ bool delay_ch;
 bool triggerisalpha;
 unsigned step_alpha;
 unsigned step_gamma;
+unsigned HPFa_par;
+unsigned HPFb_par;
 
 
 void _gen_conf(void)
@@ -68,6 +70,8 @@ void _gen_conf(void)
 		"delay_ch(A or B):\tA\n"
 		"Observed interval after trigger event(0 - 34.3597)(in seconds):\t0.00001\n"
 		"Trigger is alpha(y/n):\ty\n"
+		"High pass parameter for chA(0-32):\t32\n"
+		"High pass parameter for chB(0-32):\t32\n"
 		"Time resolved alpha amplitude step:\t100000\n"
 		"Time resolved gamma amplitude step:\t100000\n"
 		);
@@ -167,6 +171,18 @@ void _load_conf(bool pf)
 				sscanf(conffile.substr(pos_step_gamma).c_str(), "%u", &step_gamma);
 				if(pf)printf("step_gamma=%u\n",step_gamma);
 			}else {printf("Error in step_gamma. Delete file to regenerate from template.\n"); exit(0);}	
+		size_t pos_HPFa_par = conffile.find("High pass parameter for chA(0-32):");
+			if (pos_HPFa_par != string::npos){
+				pos_HPFa_par+=34;
+				sscanf(conffile.substr(pos_HPFa_par).c_str(), "%u", &HPFa_par);
+				if(pf)printf("HPFa_par=%u\n",HPFa_par);
+			}else {printf("Error in HPFa_par. Delete file to regenerate from template.\n"); exit(0);}
+		size_t pos_HPFb_par = conffile.find("High pass parameter for chB(0-32):");
+			if (pos_HPFb_par != string::npos){
+				pos_HPFb_par+=34;
+				sscanf(conffile.substr(pos_HPFb_par).c_str(), "%u", &HPFb_par);
+				if(pf)printf("HPFb_par=%u\n",HPFb_par);
+			}else {printf("Error in HPFb_par. Delete file to regenerate from template.\n"); exit(0);}	
 			
 		if(pf)printf("All loaded, no errors (I did not check for boundaries, you better had chosen them properly)!.\n");
 	}
@@ -219,7 +235,7 @@ int main(int argc,char *argv[]){
 	gamma_mintime_uint=(unsigned)(gamma_mintime*125000000);
 	interval_uint=(unsigned)(interval*125000000);
 
-	//check if red_pitaya_agcv_VERSION.bit exists
+	//check if red_pitaya_agcv_VERSION.bin exists
 	FILE* binFILE;
 	string fnamecomm="red_pitaya_agc_v";
 	fnamecomm += VERSION;
@@ -262,7 +278,7 @@ int main(int argc,char *argv[]){
 	}
 	
 	if (AGC_init()) return -1;		//fpga init
-	AGC_setup(alpha_thresh,gamma_thresh,alpha_edge,gamma_edge,alpha_mintime_uint,gamma_mintime_uint,delay_len,delay_ch);
+	AGC_setup(alpha_thresh,gamma_thresh,alpha_edge,gamma_edge,alpha_mintime_uint,gamma_mintime_uint,delay_len,delay_ch,HPFa_par,HPFb_par);
 	
 	if(pf){
 		thread term_thread (term_fun);			//ending by button
