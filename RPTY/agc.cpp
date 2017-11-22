@@ -48,6 +48,8 @@ unsigned step_alpha;
 unsigned step_gamma;
 unsigned HPFa_par;
 unsigned HPFb_par;
+int alpha_max;
+int gamma_max;
 
 
 void _gen_conf(void)
@@ -59,9 +61,11 @@ void _gen_conf(void)
 		"alpha_thresh(-8192 - 8191):\t100\n"
 		"alpha zero level (not needed by program, for reference):\t0\n"
 		"alpha_edge(Rising (R) or Falling (F)):\tR\n"
+		"alpha_max(R edge: alpha_thresh < x < 8191, F edge: -8192 < x < alpha_thresh):\t8191\n"
 		"gamma_thresh(-8192 - 8191):\t100\n"
 		"gamma zero level (not needed by program, for reference):\t0\n"
 		"gamma_edge(Rising (R) or Falling (F)):\tR\n"
+		"gamma_max(R edge: gamma_thresh < x < 8191, F edge: -8192 < x < gamma_thresh):\t8191\n"
 		"Mintime is the minimum duration from threshold rising(falling) pass to falling(rising) pass for the peak to be registered. (in seconds)\n"
 		"alpha_mintime(0 - 0.00052428):\t0.00001\n"
 		"gamma_mintime(0 - 0.00052428):\t0.00001\n"
@@ -70,8 +74,9 @@ void _gen_conf(void)
 		"delay_ch(A or B):\tA\n"
 		"Observed interval after trigger event(0 - 34.3597)(in seconds):\t0.00001\n"
 		"Trigger is alpha(y/n):\ty\n"
-		"High pass parameter for chA(0-32):\t32\n"
-		"High pass parameter for chB(0-32):\t32\n"
+		"High pass parameter for chA(0-32):\t50\n"
+		"High pass parameter for chB(0-32):\t50\n"
+		"(50 or so turns it off)\n"
 		"Time resolved alpha amplitude step:\t100000\n"
 		"Time resolved gamma amplitude step:\t100000\n"
 		);
@@ -183,6 +188,18 @@ void _load_conf(bool pf)
 				sscanf(conffile.substr(pos_HPFb_par).c_str(), "%u", &HPFb_par);
 				if(pf)printf("HPFb_par=%u\n",HPFb_par);
 			}else {printf("Error in HPFb_par. Delete file to regenerate from template.\n"); exit(0);}	
+		size_t pos_alpha_max = conffile.find("alpha_max(R edge: alpha_thresh < x < 8191, F edge: -8192 < x < alpha_thresh):");
+			if (pos_alpha_max != string::npos){
+				pos_alpha_max+=77;
+				sscanf(conffile.substr(pos_alpha_max).c_str(), "%d", &alpha_max);
+				if(pf)printf("alpha_max=%d\n",alpha_max);
+			}else {printf("Error in alpha_max. Delete file to regenerate from template.\n"); exit(0);}
+		size_t pos_gamma_max = conffile.find("gamma_max(R edge: gamma_thresh < x < 8191, F edge: -8192 < x < gamma_thresh):");
+			if (pos_gamma_max != string::npos){
+				pos_gamma_max+=77;
+				sscanf(conffile.substr(pos_gamma_max).c_str(), "%d", &gamma_max);
+				if(pf)printf("gamma_max=%d\n",gamma_max);
+			}else {printf("Error in gamma_max. Delete file to regenerate from template.\n"); exit(0);}
 			
 		if(pf)printf("All loaded, no errors (I did not check for boundaries, you better had chosen them properly)!.\n");
 	}
@@ -254,17 +271,17 @@ int main(int argc,char *argv[]){
 	
 	int ENmax_alpha;
 	if (!alpha_edge){	//rising edge
-		ENmax_alpha=8191-alpha_thresh+1;	//num of elements in the array
+		ENmax_alpha=alpha_max-alpha_thresh+1;	//num of elements in the array
 	}else{
-		ENmax_alpha=-(-8192-alpha_thresh)+1;	//num of elements in the array
+		ENmax_alpha=-(alpha_max-alpha_thresh)+1;	//num of elements in the array
 	}
 	unsigned alpha_binN = ENmax_alpha/step_alpha+1;
 	if(pf)printf("\nalpha_binN=%u\n",alpha_binN);
 	int ENmax_gamma;
 	if (!gamma_edge){
-		ENmax_gamma=8191-gamma_thresh+1;	//num of elements in the array
+		ENmax_gamma=gamma_max-gamma_thresh+1;	//num of elements in the array
 	}else{
-		ENmax_gamma=-(-8192-gamma_thresh)+1;	//num of elements in the array
+		ENmax_gamma=-(gamma_max-gamma_thresh)+1;	//num of elements in the array
 	}
 	unsigned gamma_binN = ENmax_gamma/step_gamma+1;
 	if(pf)printf("gamma_binN=%u\n\n",gamma_binN);
@@ -335,11 +352,13 @@ int main(int argc,char *argv[]){
 		if (!AGC_get_sample(&isalpha,&amplitude,&cntr_t0,&cntr_t1)){
 			if (isalpha){
 				N_alpha++;
-				alpha_array[abs(amplitude-alpha_thresh)]++;	
+				if (abs(amplitude-alpha_thresh)<ENmax_alpha)
+					alpha_array[abs(amplitude-alpha_thresh)]++;	
 			}
 			else{
 				N_gamma++;
-				gamma_array[abs(amplitude-gamma_thresh)]++;
+				if (abs(amplitude-gamma_thresh)<ENmax_gamma)
+					gamma_array[abs(amplitude-gamma_thresh)]++;
 			}
 			
 			event_ts=counter+cntr_t0-cntr_t1;
@@ -349,18 +368,22 @@ int main(int argc,char *argv[]){
 				active_trig.back().amp=amplitude;
 			}else{	//the other is trigger
 				for (int j=0;j!=active_trig.size();j++){
-					if (event_ts>active_trig[j].time+interval_uint){
+					if (event_ts>=active_trig[j].time+interval_uint){
 						active_trig.pop_front();
 						j--;
+					}else if (event_ts<active_trig[j].time) {printf("Error : event_ts<active_trig[j].time\n"); exit(0); //TODO remove this
 					}else{
 						unsigned a,b;
-						if (active_trig[j].time<=event_ts) {
-							if (triggerisalpha) a=abs(active_trig[j].amp-alpha_thresh)/step_alpha;
-							else a=abs(amplitude-alpha_thresh)/step_alpha;
-							if (triggerisalpha) b=abs(amplitude-gamma_thresh)/step_gamma;
-							else b=abs(active_trig[j].amp-gamma_thresh)/step_gamma;
-							bins[a][b][event_ts-active_trig[j].time]++;
+						if (triggerisalpha){
+							a=abs(active_trig[j].amp-alpha_thresh)/step_alpha;
+							b=abs(amplitude-gamma_thresh)/step_gamma;
+						} 
+						else {
+							a=abs(amplitude-alpha_thresh)/step_alpha;
+							b=abs(active_trig[j].amp-gamma_thresh)/step_gamma;
 						}
+						if ((a<alpha_binN)&&(b<gamma_binN))
+							bins[a][b][event_ts-active_trig[j].time]++;
 					}
 				}	
 			}
