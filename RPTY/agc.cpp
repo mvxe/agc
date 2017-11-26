@@ -16,7 +16,7 @@
     along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-#define VERSION "1.3"
+#define VERSION "1.4"
 
 #include <cstdio>
 #include <cstdlib>
@@ -32,6 +32,7 @@ using namespace std;
 struct peak{
 	long long unsigned time;
 	int amp;
+	bool isalpha;
 };
 
 int alpha_thresh;
@@ -336,60 +337,93 @@ int main(int argc,char *argv[]){
 	}
 	if (ifile!=NULL) fclose(ifile);	
 
-	long long unsigned N_alpha=0;
-        long long unsigned N_gamma=0;		//on PC long long int is 8byte, long int is 8byte, int is 4byte
-        long long unsigned counter=0;		//on ARM long long int is 8byte, long int is 4byte, int is 4byte	//TODO maybe use uint32_t 
+	long long unsigned N_alpha=0;		//on PC long long int is 8byte, long int is 8byte, int is 4byte
+        long long unsigned N_gamma=0;		//on ARM long long int is 8byte, long int is 4byte, int is 4byte	//TODO maybe use uint32_t 
+        long long unsigned counter=65536;
         long long unsigned event_ts;
         
         deque <peak> active_trig;
         bool isalpha;
 	int amplitude;
-	unsigned int cntr_t0;
-	unsigned int cntr_t1;
+	unsigned cntr_t0;
+	unsigned cntr_t1;
+	
+	deque <peak> time_shift;	//see comments below
 	
 	AGC_reset_fifo(); 
 	for(int i=0;;i++){
 		if (!AGC_get_sample(&isalpha,&amplitude,&cntr_t0,&cntr_t1)){
-			if (isalpha){
-				N_alpha++;
-				if (abs(amplitude-alpha_thresh)<ENmax_alpha)
-					alpha_array[abs(amplitude-alpha_thresh)]++;	
-			}
-			else{
-				N_gamma++;
-				if (abs(amplitude-gamma_thresh)<ENmax_gamma)
-					gamma_array[abs(amplitude-gamma_thresh)]++;
-			}
-			
-			event_ts=counter+cntr_t0-cntr_t1;
-			if (triggerisalpha == isalpha){
-				active_trig.emplace_back();
-				active_trig.back().time=event_ts;
-				active_trig.back().amp=amplitude;
-			}else{	//the other is trigger
-				for (int j=0;j!=active_trig.size();j++){
-					if (event_ts>=active_trig[j].time+interval_uint){
-						active_trig.pop_front();
-						j--;
-					}else if (event_ts<active_trig[j].time) {printf("Error : event_ts<active_trig[j].time\n"); exit(0); //TODO remove this
-					}else{
-						unsigned a,b;
-						if (triggerisalpha){
-							a=abs(active_trig[j].amp-alpha_thresh)/step_alpha;
-							b=abs(amplitude-gamma_thresh)/step_gamma;
-						} 
-						else {
-							a=abs(amplitude-alpha_thresh)/step_alpha;
-							b=abs(active_trig[j].amp-gamma_thresh)/step_gamma;
+				//Peaks may not be in chronological order so we store and sort ~0.5ms of data before processing.
+				//This is because the FPGA sends data on event end, ie. after the threshold is passed again, so for example if we have
+				//a peak that lasts from t=10 to t=20 on chA and t=12 to t=18 on chB, the peak on chB would be reported before the one
+				//on chA because it ends earlier, so the order is swapped. If the peak on chA is trigger, the peak on chB won't be detected.
+				//For this reason we record and sort ~0.5ms of data, so that the subsequent triggering software has them in chrono. order.
+			event_ts=counter+cntr_t0-cntr_t1;	//event_ts points at peak START
+
+			time_shift.emplace_front();
+			time_shift.front().time=event_ts;
+			time_shift.front().amp=amplitude;
+			time_shift.front().isalpha=isalpha;
+
+			if (time_shift.size()>1)
+				if (event_ts<=time_shift[1].time){	//(quirk of how the fpga code works: the event would be in the past)(caused by overlapping peaks)
+					for (int j=1;j!=time_shift.size();j++){
+						if (event_ts<time_shift[j].time){
+							swap(time_shift[j-1],time_shift[j]);
 						}
-						if ((a<alpha_binN)&&(b<gamma_binN))
-							bins[a][b][event_ts-active_trig[j].time]++;
+						else if (event_ts==time_shift[j].time){
+							if (triggerisalpha != time_shift[j].isalpha) swap(time_shift[j-1],time_shift[j]);	//trigger has to go first
+							else break;
+						}
+						else break;
 					}
-				}	
+				}
+			
+			counter+=cntr_t0;		//counter points at peak END
+
+			while (counter>time_shift.back().time+65536){		//this part uses events chronologically sorted (no peak can be longer than ~0.5ms)
+				event_ts=time_shift.back().time;
+				amplitude=time_shift.back().amp;
+				isalpha=time_shift.back().isalpha;
+				time_shift.pop_back();
+				if (isalpha){
+					N_alpha++;
+					if (abs(amplitude-alpha_thresh)<ENmax_alpha)
+						alpha_array[abs(amplitude-alpha_thresh)]++;	
+				}
+				else{
+					N_gamma++;
+					if (abs(amplitude-gamma_thresh)<ENmax_gamma)
+						gamma_array[abs(amplitude-gamma_thresh)]++;
+				}
+				
+				if (triggerisalpha == isalpha){
+					active_trig.emplace_back();
+					active_trig.back().time=event_ts;
+					active_trig.back().amp=amplitude;
+				}else{	//the other is trigger
+					for (int j=0;j!=active_trig.size();j++){
+						if (event_ts>=active_trig[j].time+interval_uint){
+							active_trig.pop_front();
+							j--;
+						}else{
+							unsigned a,b;
+							if (triggerisalpha){
+								a=abs(active_trig[j].amp-alpha_thresh)/step_alpha;
+								b=abs(amplitude-gamma_thresh)/step_gamma;
+							} 
+							else {
+								a=abs(amplitude-alpha_thresh)/step_alpha;
+								b=abs(active_trig[j].amp-gamma_thresh)/step_gamma;
+							}
+							if ((a<alpha_binN)&&(b<gamma_binN))
+								bins[a][b][event_ts-active_trig[j].time]++;
+						}
+					}	
+				}
+				if (time_shift.empty()) break;
 			}
-			counter+=cntr_t0;
 		}
-	
 
 		if (i/1000000){
 			if(pf){

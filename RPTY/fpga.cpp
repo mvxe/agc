@@ -53,7 +53,7 @@ struct _par_str{
 	uint32_t mes_data;				//address: h20
 							// b31 : mes_isd (1=new, 0=empty), b30 : type (0 = alpha, 1 = gamma), b29-16 :  amplitude (14 bit signed), b15-b0 : empty (0s)
 	uint32_t mes_cntr_t0;				//address: h24	
-							// 32bit unsigned int	time difference from falling threshold of last peak to rising threshold of current peak			
+							// 32bit unsigned int	time difference from falling threshold of last peak to falling threshold of current peak			
 	uint32_t mes_cntr_t1;				//address: h28	
 							// 16bit unsigned int	time from rising threshold crossing to falling threshold crossing (peak width)	##READING OF THIS REGISTER CLEARS THIS PEAK FROM FIFO##	
 	uint32_t HPFab;					//address: h2C

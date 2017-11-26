@@ -102,6 +102,7 @@ reg [ 15: 0] cntr_t1_gamma;
 reg cntr_gamma_ongoing;
 reg cntr_gamma_saveflag;
 reg tmpreg;
+reg tmpreg2;
 
 reg          mes_received;				//this gets flipped if the last element in the FIFO has been read
 reg          mes_received_loc;				//a local copy of mes_received which we check to see if flipped
@@ -143,6 +144,7 @@ always @(posedge clk_i) begin
 		cntr_gamma_saveflag <= 1'd0;
 		
 		tmpreg <= 1'd0;
+		tmpreg2 <= 1'd0;
 	end
 	else begin
 		HPFa_in <= in_a;
@@ -174,36 +176,48 @@ always @(posedge clk_i) begin
 			end
 		end
 		else if ((cntr_isd_buf[0]==1'd0) && (cntr_alpha_saveflag == 1'b1)) begin
-			cntr_t0_buf[0] <= cntr_t0 - 32'd1;
+			cntr_t0_buf[0] <= cntr_t0;
 			cntr_t1_buf[0] <= cntr_t1_alpha;		//FIFO first element
 			cntr_amp_buf[0] <= cntr_max_alpha;
 			cntr_isd_buf[0] <= 1'd1;
 			cntr_type_buf[0] <= 1'd0;			//alpha
-			cntr_t0 <= 32'd1;
+			if (tmpreg) cntr_t0 <= 32'd2;
+			else if (cntr_gamma_saveflag == 1'b1) begin
+				tmpreg2 <= 1'd1;			//overlapping peak ends
+				cntr_t0 <= 32'd0;
+			end
+			else cntr_t0 <= 32'd1;
 			cntr_alpha_saveflag <= 1'b0;
 			mes_in_FIFO <= mes_in_FIFO+16'd1;
 			tmpreg <= 1'd0;
+			
 		end
 		else if (cntr_isd_buf[0]==1'd0) begin
-			cntr_t0_buf[0] <= cntr_t0 - 32'd1;
+			cntr_t0_buf[0] <= cntr_t0;
 			cntr_t1_buf[0] <= cntr_t1_gamma;		//FIFO first element
 			cntr_amp_buf[0] <= cntr_max_gamma;
 			cntr_isd_buf[0] <= 1'd1;
 			cntr_type_buf[0] <= 1'd1;			//gamma
-			cntr_t0 <= 32'd1;
+			if (tmpreg2) begin				//if it overlapped
+				cntr_t0 <= 32'd3;
+				tmpreg2 <= 1'd0;
+			end
+			else if (tmpreg) cntr_t0 <= 32'd2;
+			else cntr_t0 <= 32'd1;
 			cntr_gamma_saveflag <= 1'b0;
 			mes_in_FIFO <= mes_in_FIFO+16'd1;
 			tmpreg <= 1'd0;
 		end
 		else begin
 			if (tmpreg) begin
-				mes_lost <= mes_lost + 32'd1;
+				mes_lost <= mes_lost + 32'd1;		//lost measurements add errors to timing, (timing could be fixed, but the exp. should be setup to not lose any measuerements anyway)
+				cntr_t0 <= 32'd1;			//(in other words, check the var mes_lost, if its nonzero you should change the settings or decrease num of events)
 				cntr_alpha_saveflag <= 1'b0;
 				cntr_gamma_saveflag <= 1'b0;
 				tmpreg <= 1'd0;
+				tmpreg2 <= 1'd0;
 			end
 			else begin	//we give it one extra cycle so that the FIFO may move
-				cntr_t0 <= cntr_t0 + 32'd1;
 				tmpreg <= 1'd1;
 			end
 		end
