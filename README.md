@@ -6,6 +6,7 @@ Originally made for Alpha - Gamma correlation counting on an Am-241 source, it c
 ## FPGA
 The FPGA folder contains files needed to compile the .bit file for the FPGA. The initial code was taken from 
 <https://github.com/RedPitaya/RedPitaya/tree/master/fpga> (an older version, check the commit dates as the history was preserved).
+See file FPGA/rtl/ssla.v for the counter code.
 To compile the FPGA code you need vivado 2015.4 (or modify Makefile and possibly other files to support a newer version).
 To compile (replace PATH with your vivado installation folder) run:
 ```
