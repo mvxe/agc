@@ -459,12 +459,15 @@ int main(int argc,char *argv[]){
 	if(pf)printf("done! format is \'%%uint32\' starting from threshold(=0). One line is one channel.\n");
 	delete[] gamma_array;
 
+	unsigned *timesum = new unsigned[interval_uint];
+	for (int k=0;k!=interval_uint;k++)timesum[k]=0;
 	
 	if(pf)printf("Saving time...");
 	ofile = fopen("measurements/time.dat","wb");
 	for (int i=0; i!=alpha_binN;i++) {
 		for (int j=0; j!=gamma_binN;j++){
 			fwrite (bins[i][j],sizeof(unsigned),interval_uint,ofile);
+			for (int k=0;k!=interval_uint;k++)timesum[k]+=bins[i][j][k];
 			delete[] bins[i][j];
 		}
 		delete[] bins[i];
@@ -472,6 +475,13 @@ int main(int argc,char *argv[]){
 	delete[] bins;
 	fclose(ofile);
 	if(pf)printf("done! format is \'%%uint32\' and is a 3D matrix of size %d:%d:%d.\n",alpha_binN,gamma_binN,interval_uint);
+	
+	if(pf)printf("Saving timesum...");
+	ofile=fopen("measurements/timesum.dat","wb");
+	fwrite (timesum,sizeof(unsigned),interval_uint,ofile);
+	fclose(ofile);
+	if(pf)printf("done! format is \'%%uint32\' one step is 8 ns.\n");
+	delete[] timesum;
 	
 	if(pf)printf("Saving duration...");
 	ofile=fopen("measurements/duration.txt","a");
