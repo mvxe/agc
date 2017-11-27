@@ -43,7 +43,7 @@ They may be plotted with gnuplot:
 ```
 plot "alpha.dat" binary format='%uint32' using ($0):1 with lines notitle
 plot "gamma.dat" binary format='%uint32' using ($0):1 with lines notitle
-plot "timesum.dat" binary format='%uint32' using (cal($0/125000000)):1 with lines notitle
+plot "timesum.dat" binary format='%uint32' using ($0/125000000):1 with lines notitle
 ```
 The file time.dat is a 3D data array and cannot be plotted easily.
 To process time.dat see <https://github.com/mvxe/agc-proc>
