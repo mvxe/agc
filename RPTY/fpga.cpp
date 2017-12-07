@@ -35,29 +35,27 @@
 
 struct _par_str{
 	uint32_t cntr_thresh_alpha;			//address: h00
-							// b14 : alpha trig edge, b13-b0 : alpha threshold (14 bit signed)
+	                           			// b14 : alpha trig edge, b13-b0 : alpha threshold (14 bit signed)
 	uint32_t cntr_thresh_gamma;			//address: h04
-							// b14 : gamma trig edge, b13-b0 : gamma threshold (14 bit signed)
+	                           			// b14 : gamma trig edge, b13-b0 : gamma threshold (14 bit signed)
 	uint32_t cntr_mintime_alpha;			//address: h08
-							// b15-b0 : alpha min. duration to be counted as an event (16 bit unsigned)
+	                            			// b31-b0 : alpha min. duration to be counted as an event (32 bit unsigned)
 	uint32_t cntr_mintime_gamma;			//address: h0C
-							// b15-b0 : gamma min. duration to be counted as an event (16 bit unsigned)
+	                            			// b31-b0 : gamma min. duration to be counted as an event (32 bit unsigned)
 	uint32_t reset_fifo;				//address: h10
-							// just write anything to this reg to reset the fifo
+	                    				// just write anything to this reg to reset the fifo
 	uint32_t mes_lost;				//address: h14
-							// b31-0 : number of lost samples (32 bit unsigned)
+	                  				// b31-0 : number of lost samples (32 bit unsigned)
 	uint32_t mes_in_queue;				//address: h18
-							// b31-16 : maximum number of samples in queue at any time since laste reset (16 bit unsigned) , b15-0 : number of samples currently in queue (16 bit unsigned)											
-	uint32_t delay_len;				//address: h1C
-							// b9 : channel to be delayed, b8-b0 : channel delay (9 bit unsigned, 1==1e-8 s)
+	                      				// b31-16 : maximum number of samples in queue at any time since laste reset (16 bit unsigned) , b15-0 : number of samples currently in queue (16 bit unsigned)											
+	uint32_t UNU0;					//address: h1C
+	              					// Unused
 	uint32_t mes_data;				//address: h20
-							// b31 : mes_isd (1=new, 0=empty), b30 : type (0 = alpha, 1 = gamma), b29-16 :  amplitude (14 bit signed), b15-b0 : empty (0s)
-	uint32_t mes_cntr_t0;				//address: h24	
-							// 32bit unsigned int	time difference from falling threshold of last peak to falling threshold of current peak			
-	uint32_t mes_cntr_t1;				//address: h28	
-							// 16bit unsigned int	time from rising threshold crossing to falling threshold crossing (peak width)	##READING OF THIS REGISTER CLEARS THIS PEAK FROM FIFO##	
-	uint32_t HPFab;					//address: h2C
-							// b15-8 : HPF parameter for chB (8 bit unsigned, must be 0<=;<=32) , b7-0 : HPF parameter for chA (8 bit unsigned, must be 0<=;<=32)						
+	                  				// b31 : mes_isd (1=new, 0=empty), b30 : type (0 = alpha, 1 = gamma), b29-16 :  amplitude (14 bit signed), b15-b0 : empty (0s)
+	uint32_t mes_timestamp_l;			//address: h24	
+	                         			// 32bit unsigned int	lower part [31:0] of 64 bit unsigned timestamp			
+	uint32_t mes_timestamp_h;			//address: h28	
+	                         			// 32bit unsigned int	higher part [63:32] of 64 bit unsigned timestamp	##READING OF THIS REGISTER CLEARS THIS PEAK FROM FIFO##						
 };
 
 _par_str *AGC = NULL;	//parameters
@@ -97,31 +95,30 @@ int AGC_init(void)
   	  
 	AGC = (_par_str *)page_ptr + page_off;
 	
-    return 0;
-}
-
-inline int AGC_reset_fifo()
-{
-	AGC->reset_fifo=0;
 	return 0;
 }
 
-inline unsigned AGC_get_num_lost()
+void AGC_reset_fifo()
+{
+	AGC->reset_fifo=0;
+}
+
+inline uint32_t AGC_get_num_lost()
 {
 	return AGC->mes_lost;
 }
 
-inline unsigned AGC_get_in_queue()	
+inline uint16_t AGC_get_in_queue()	
 {
 	return (AGC->mes_in_queue&0x0000FFFF);
 }
 
-inline unsigned AGC_get_max_in_queue()
+inline uint16_t AGC_get_max_in_queue()
 {
 	return (AGC->mes_in_queue&0xFFFF0000)>>16;
 }
 
-int AGC_setup(int cntr_thresh_alpha, int cntr_thresh_gamma, bool cntr_edge_alpha, bool cntr_edge_gamma, unsigned cntr_mintime_alpha, unsigned cntr_mintime_gamma, unsigned delay_len, bool delay_ch, unsigned HPFa, unsigned HPFb)	
+int AGC_setup(int cntr_thresh_alpha, int cntr_thresh_gamma, bool cntr_edge_alpha, bool cntr_edge_gamma, uint32_t cntr_mintime_alpha, uint32_t cntr_mintime_gamma)	
 {
 	if (cntr_thresh_alpha>8191) cntr_thresh_alpha=8191;			//threshold from -8192 to 8191
 	else if (cntr_thresh_alpha<-8192) cntr_thresh_alpha=-8192;		//if threshold is negative the peak is assumed to be inverted
@@ -129,14 +126,12 @@ int AGC_setup(int cntr_thresh_alpha, int cntr_thresh_gamma, bool cntr_edge_alpha
 	else if (cntr_thresh_gamma<-8192) cntr_thresh_gamma=-8192;
 	AGC->cntr_thresh_alpha = (cntr_thresh_alpha&0x3FFF)|(cntr_edge_alpha?0x4000:0);
 	AGC->cntr_thresh_gamma = (cntr_thresh_gamma&0x3FFF)|(cntr_edge_gamma?0x4000:0);
-	AGC->cntr_mintime_alpha = cntr_mintime_alpha;				//time is: cntr_mintime_alpha * 8 ns  (16bit unsigned)
+	AGC->cntr_mintime_alpha = cntr_mintime_alpha;				//time is: cntr_mintime_alpha * 8 ns  (32bit unsigned)
 	AGC->cntr_mintime_gamma = cntr_mintime_gamma;
-	AGC->delay_len = (delay_len&0x1FF)|(delay_ch?0x200:0);			//  0<=delay_len<=511
-	AGC->HPFab=(HPFa&0xFF)|((HPFb&0xFF)<<8);				//  0<=HPFa,HPFb<=32
 	return 0;
 }
 
-inline int AGC_get_sample(bool *isalpha, int *amplitude, unsigned *cntr_t0, unsigned *cntr_t1)
+inline int AGC_get_sample(bool *isalpha, int *amplitude, uint64_t *timestamp)
 {
 	uint32_t temp;
 	temp=AGC->mes_data;
@@ -145,8 +140,8 @@ inline int AGC_get_sample(bool *isalpha, int *amplitude, unsigned *cntr_t0, unsi
 	else *isalpha=true;
 	*amplitude = (temp&0x3FFF0000)>>16;
 	if (*amplitude&0x2000) *amplitude^=0xFFFFC000;
-	*cntr_t0=AGC->mes_cntr_t0;
-	*cntr_t1=AGC->mes_cntr_t1&0xFFFF;
+	*timestamp=AGC->mes_timestamp_l;
+	*timestamp|=(uint64_t)AGC->mes_timestamp_h<<32;
 	return 0;								//new data was returned
 }
 
