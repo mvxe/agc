@@ -229,7 +229,7 @@ int main(int argc,char *argv[]){
 	//make measurements folder if missing, and check if existing configuration inside it matches the config in the working directory
 	system ("mkdir measurements -p");
 	if (_match_confs()) {printf ("Configuration in working directory does not match the one in measurements folder. "
-			"You should rename the measurements folder to prevent appending new data with different configuration. Aborting.\n",fnamecomm.c_str());return 0;}
+			"You should rename the measurements folder to prevent appending new data with different configuration. Aborting.\n");return 0;}
 	
 	int ENmax_alpha;
 	if (!alpha_edge){	//rising edge
